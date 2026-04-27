@@ -20,7 +20,7 @@ Future<void> main() async {
     'soma-calendar-poll',
     'calendarPoll',
     frequency: const Duration(minutes: 15),
-    existingWorkPolicy: ExistingWorkPolicy.keep,
+    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
   );
   runApp(const SomaAlarmApp());
 }
