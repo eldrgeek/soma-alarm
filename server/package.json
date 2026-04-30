@@ -1,0 +1,13 @@
+{
+  "name": "soma-webhook",
+  "version": "1.0.0",
+  "description": "SOMA alarm event receiver — Contabo VPS webhook endpoint",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.1",
+    "express": "^4.21.2"
+  }
+}
