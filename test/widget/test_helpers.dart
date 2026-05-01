@@ -39,7 +39,8 @@ void setupMockPlatformChannels() {
           scheduledNotifications.add(Map<String, dynamic>.from(args));
           return null;
         case 'cancel':
-          cancelledNotificationIds.add(call.arguments as int);
+          final args = call.arguments as Map;
+          cancelledNotificationIds.add(args['id'] as int);
           return null;
         case 'pendingNotificationRequests':
           return <Map<String, dynamic>>[];

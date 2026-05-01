@@ -4,6 +4,8 @@ import 'package:soma_alarm/src/alarms.dart';
 import 'test_helpers.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     setupMockPlatformChannels();
   });
