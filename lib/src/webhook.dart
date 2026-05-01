@@ -11,6 +11,7 @@ class WebhookClient {
     required DateTime firedTime,
     required String action,
     String? location,
+    String? alarmKind,
   }) async {
     if (!await Settings.webhookEnabled()) return;
     final url = await Settings.webhookUrl();
@@ -26,6 +27,7 @@ class WebhookClient {
               'fired_time': firedTime.toUtc().toIso8601String(),
               'action': action,
               if (location != null && location.isNotEmpty) 'location': location,
+              if (alarmKind != null) 'alarm_kind': alarmKind,
               'source': 'soma-alarm-android',
             }),
           )
