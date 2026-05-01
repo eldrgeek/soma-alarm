@@ -24,10 +24,10 @@ class CalendarReader {
   static const _channel = MethodChannel('org.esr.soma_alarm/calendar');
 
   Future<bool> ensurePermissions() async {
-    var status = await Permission.calendar.status;
+    var status = await Permission.calendarFullAccess.status;
     debugPrint('SOMA-CAL: permission=$status');
     if (!status.isGranted) {
-      status = await Permission.calendar.request();
+      status = await Permission.calendarFullAccess.request();
       debugPrint('SOMA-CAL: requested permission=$status');
     }
     return status.isGranted;

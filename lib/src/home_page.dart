@@ -61,7 +61,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showDiagnostics() async {
-    final calPerm = await Permission.calendar.status;
+    final calPerm = await Permission.calendarFullAccess.status;
 
     const channel = MethodChannel('org.esr.soma_alarm/calendar');
     var rawCount = 0;
