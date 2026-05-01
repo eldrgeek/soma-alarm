@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -8,8 +9,10 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'webhook.dart';
 
-const String kEventChannel = 'soma_event_alarms';
-const String kMorningChannel = 'soma_morning_alarm';
+const String kEventChannel = 'soma_event_alarms_v2';
+const String kMorningChannel = 'soma_morning_alarm_v2';
+const String _kOldEventChannel = 'soma_event_alarms';
+const String _kOldMorningChannel = 'soma_morning_alarm';
 
 const String kActionSnooze5 = 'snooze5';
 const String kActionSnooze10 = 'snooze10';
@@ -82,17 +85,30 @@ class AlarmService {
         AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.requestNotificationsPermission();
     await androidImpl?.requestExactAlarmsPermission();
-    await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+
+    await androidImpl?.deleteNotificationChannel(_kOldEventChannel);
+    await androidImpl?.deleteNotificationChannel(_kOldMorningChannel);
+
+    final vibPattern = Int64List.fromList(<int>[0, 500, 200, 500, 200, 500]);
+    await androidImpl?.createNotificationChannel(AndroidNotificationChannel(
       kEventChannel,
       'Calendar event alarms',
       description: 'Alarms fired before calendar events.',
       importance: Importance.max,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      enableVibration: true,
+      vibrationPattern: vibPattern,
     ));
-    await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+    await androidImpl?.createNotificationChannel(AndroidNotificationChannel(
       kMorningChannel,
       'Morning routine',
       description: 'Daily morning routine alarm.',
       importance: Importance.max,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      enableVibration: true,
+      vibrationPattern: vibPattern,
     ));
 
     _initialized = true;
@@ -104,7 +120,7 @@ class AlarmService {
   }
 
   AndroidNotificationDetails _eventDetails() {
-    return const AndroidNotificationDetails(
+    return AndroidNotificationDetails(
       kEventChannel,
       'Calendar event alarms',
       channelDescription: 'Alarms fired before calendar events.',
@@ -113,8 +129,11 @@ class AlarmService {
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
       playSound: true,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       enableVibration: true,
-      actions: <AndroidNotificationAction>[
+      vibrationPattern: Int64List.fromList(<int>[0, 500, 200, 500, 200, 500]),
+      actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(kActionSnooze5, 'Snooze 5',
             cancelNotification: true, showsUserInterface: false),
         AndroidNotificationAction(kActionSnooze10, 'Snooze 10',
@@ -126,7 +145,7 @@ class AlarmService {
   }
 
   AndroidNotificationDetails _morningDetails() {
-    return const AndroidNotificationDetails(
+    return AndroidNotificationDetails(
       kMorningChannel,
       'Morning routine',
       channelDescription: 'Daily morning routine alarm.',
@@ -135,7 +154,10 @@ class AlarmService {
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
       playSound: true,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
       enableVibration: true,
+      vibrationPattern: Int64List.fromList(<int>[0, 500, 200, 500, 200, 500]),
     );
   }
 
@@ -204,6 +226,16 @@ class AlarmService {
   }
 
   Future<void> cancelMorningAlarm() => _plugin.cancel(0xCAFE);
+
+  Future<void> scheduleTestAlarm() async {
+    final when = DateTime.now().add(const Duration(seconds: 5));
+    await scheduleEventAlarm(AlarmRecord(
+      eventId: 'test-alarm-${when.millisecondsSinceEpoch}',
+      title: 'Test alarm',
+      scheduled: when,
+      isLeadAlarm: false,
+    ));
+  }
 
   Future<List<AlarmRecord>> scheduledAlarms() async {
     final p = await SharedPreferences.getInstance();
