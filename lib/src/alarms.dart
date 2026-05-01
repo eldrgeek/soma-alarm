@@ -175,6 +175,11 @@ class AlarmService {
     await _removeScheduled(eventId);
   }
 
+  Future<void> cancelAlarm(String eventId, {required bool lead}) async {
+    await _plugin.cancel(_idFor(eventId, lead: lead));
+    await _removeScheduledByKind(eventId, lead: lead);
+  }
+
   Future<void> scheduleMorningAlarm({
     required int hour,
     required int minute,
@@ -229,6 +234,16 @@ class AlarmService {
     await p.setStringList(_kScheduledKey, existing);
   }
 
+  Future<void> _removeScheduledByKind(String eventId, {required bool lead}) async {
+    final p = await SharedPreferences.getInstance();
+    final existing = p.getStringList(_kScheduledKey) ?? <String>[];
+    existing.removeWhere((s) {
+      final j = jsonDecode(s) as Map<String, dynamic>;
+      return j['event_id'] == eventId && (j['is_lead'] ?? true) == lead;
+    });
+    await p.setStringList(_kScheduledKey, existing);
+  }
+
   Future<void> _onAction(NotificationResponse resp) async {
     await _handleResponse(resp);
   }
@@ -243,6 +258,7 @@ class AlarmService {
         scheduledTime: DateTime.now(),
         firedTime: DateTime.now(),
         action: kActionMorning,
+        alarmKind: 'morning',
       );
       return;
     }
@@ -255,6 +271,7 @@ class AlarmService {
       firedTime: DateTime.now(),
       action: actionId,
       location: rec.location,
+      alarmKind: rec.isLeadAlarm ? 'lead' : 'start',
     );
 
     final svc = AlarmService.instance;
@@ -271,7 +288,7 @@ class AlarmService {
       );
       await svc.scheduleEventAlarm(snoozed);
     } else if (actionId == kActionDismiss) {
-      await svc.cancelForEvent(rec.eventId);
+      await svc.cancelAlarm(rec.eventId, lead: rec.isLeadAlarm);
     }
   }
 }
