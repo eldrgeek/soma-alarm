@@ -1,7 +1,10 @@
 package org.esr.soma_alarm
 
+import android.accounts.AccountManager
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.database.Cursor
+import android.os.Bundle
 import android.provider.CalendarContract
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -12,18 +15,40 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.esr.soma_alarm/calendar")
             .setMethodCallHandler { call, result ->
-                if (call.method == "getInstances") {
-                    val beginMs = call.argument<Long>("begin") ?: System.currentTimeMillis()
-                    val endMs = call.argument<Long>("end") ?: (beginMs + 86400000L)
-                    try {
-                        result.success(queryInstances(beginMs, endMs))
-                    } catch (e: Exception) {
-                        result.error("CALENDAR_ERROR", e.message, null)
+                when (call.method) {
+                    "getInstances" -> {
+                        val beginMs = call.argument<Long>("begin") ?: System.currentTimeMillis()
+                        val endMs = call.argument<Long>("end") ?: (beginMs + 86400000L)
+                        try {
+                            result.success(queryInstances(beginMs, endMs))
+                        } catch (e: Exception) {
+                            result.error("CALENDAR_ERROR", e.message, null)
+                        }
                     }
-                } else {
-                    result.notImplemented()
+                    "requestSync" -> {
+                        try {
+                            result.success(requestCalendarSync())
+                        } catch (e: Exception) {
+                            result.error("SYNC_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun requestCalendarSync(): Boolean {
+        val am = AccountManager.get(this)
+        val accounts = am.getAccountsByType("com.google")
+        if (accounts.isEmpty()) return false
+        for (account in accounts) {
+            val extras = Bundle().apply {
+                putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true)
+                putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
+            }
+            ContentResolver.requestSync(account, CalendarContract.AUTHORITY, extras)
+        }
+        return true
     }
 
     private fun queryInstances(beginMs: Long, endMs: Long): List<Map<String, Any?>> {

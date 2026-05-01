@@ -60,6 +60,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _forceCalendarSync() async {
+    const channel = MethodChannel('org.esr.soma_alarm/calendar');
+    try {
+      final result = await channel.invokeMethod<bool>('requestSync');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result == true
+              ? 'Calendar sync requested. Refreshing...'
+              : 'No Google calendar accounts found.'),
+        ),
+      );
+      if (result == true) {
+        await Future<void>.delayed(const Duration(seconds: 3));
+        await _refresh();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    }
+  }
+
   Future<void> _showDiagnostics() async {
     final calPerm = await Permission.calendarFullAccess.status;
 
@@ -113,6 +137,13 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _forceCalendarSync();
+            },
+            child: const Text('Force Calendar Sync'),
+          ),
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
         ],
