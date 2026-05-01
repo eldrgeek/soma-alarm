@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  device_calendar: ^4.3.3
   flutter_local_notifications: ^17.2.3
   sqflite: ^2.3.3+1
   path: ^1.9.0

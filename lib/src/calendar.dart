@@ -1,5 +1,6 @@
-import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class CalendarEventLite {
   final String id;
@@ -20,16 +21,16 @@ class CalendarEventLite {
 }
 
 class CalendarReader {
-  final DeviceCalendarPlugin _plugin = DeviceCalendarPlugin();
+  static const _channel = MethodChannel('org.esr.soma_alarm/calendar');
 
   Future<bool> ensurePermissions() async {
-    var perm = await _plugin.hasPermissions();
-    debugPrint('SOMA-CAL: hasPermissions=${perm.data}');
-    if (perm.data != true) {
-      perm = await _plugin.requestPermissions();
-      debugPrint('SOMA-CAL: requestPermissions=${perm.data}');
+    var status = await Permission.calendar.status;
+    debugPrint('SOMA-CAL: permission=$status');
+    if (!status.isGranted) {
+      status = await Permission.calendar.request();
+      debugPrint('SOMA-CAL: requested permission=$status');
     }
-    return perm.data == true;
+    return status.isGranted;
   }
 
   Future<List<CalendarEventLite>> upcomingEvents({
@@ -39,37 +40,39 @@ class CalendarReader {
       debugPrint('SOMA-CAL: no permission, returning empty');
       return const [];
     }
-    final cals = await _plugin.retrieveCalendars();
-    final calList = cals.data ?? const <Calendar>[];
-    debugPrint('SOMA-CAL: ${calList.length} calendars found');
-    final out = <CalendarEventLite>[];
     final now = DateTime.now();
     final end = now.add(window);
-    var rawCount = 0;
-    for (final cal in calList) {
-      final id = cal.id;
-      if (id == null) continue;
-      final res = await _plugin.retrieveEvents(
-        id,
-        RetrieveEventsParams(startDate: now, endDate: end),
-      );
-      final events = res.data ?? const <Event>[];
-      rawCount += events.length;
-      for (final e in events) {
-        final start = e.start?.toLocal();
-        if (start == null) continue;
+    try {
+      final List<dynamic> results = await _channel.invokeMethod('getInstances', {
+        'begin': now.millisecondsSinceEpoch,
+        'end': end.millisecondsSinceEpoch,
+      });
+      debugPrint('SOMA-CAL: platform channel returned ${results.length} instances');
+      final out = <CalendarEventLite>[];
+      for (final item in results) {
+        final map = Map<String, dynamic>.from(item as Map);
+        final allDay = map['all_day'] as bool? ?? false;
+        if (allDay) continue;
+        final beginMs = map['begin'] as int;
+        final start = DateTime.fromMillisecondsSinceEpoch(beginMs);
         if (start.isBefore(now) || start.isAfter(end)) continue;
-        if (e.allDay == true) continue;
+        final title = (map['title'] as String?)?.trim();
         out.add(CalendarEventLite(
-          id: e.eventId ?? '${start.toIso8601String()}-${e.title}',
-          title: (e.title?.trim().isNotEmpty ?? false) ? e.title!.trim() : '(no title)',
+          id: map['event_id'] as String? ?? '$beginMs',
+          title: (title != null && title.isNotEmpty) ? title : '(no title)',
           start: start,
-          location: e.location,
-          calendarId: id,
+          location: map['location'] as String?,
+          calendarId: map['calendar_id'] as String? ?? '',
         ));
       }
+      debugPrint('SOMA-CAL: ${out.length} after filtering (excl allDay + out-of-range)');
+      if (out.isNotEmpty) {
+        debugPrint('SOMA-CAL: first: ${out.first.title} at ${out.first.start}');
+      }
+      return out;
+    } catch (e, st) {
+      debugPrint('SOMA-CAL: platform channel error: $e\n$st');
+      return const [];
     }
-    debugPrint('SOMA-CAL: $rawCount raw events, ${out.length} after filtering');
-    return out;
   }
 }

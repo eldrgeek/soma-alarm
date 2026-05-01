@@ -1,6 +1,7 @@
-import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'alarms.dart';
 import 'background.dart';
@@ -60,32 +61,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showDiagnostics() async {
-    final plugin = DeviceCalendarPlugin();
-    final hasPerm = await plugin.hasPermissions();
-    final cals = hasPerm.data == true
-        ? (await plugin.retrieveCalendars()).data ?? []
-        : <Calendar>[];
+    final calPerm = await Permission.calendar.status;
 
-    final now = DateTime.now();
+    const channel = MethodChannel('org.esr.soma_alarm/calendar');
     var rawCount = 0;
     var filteredCount = 0;
-    if (hasPerm.data == true) {
-      for (final cal in cals) {
-        if (cal.id == null) continue;
-        final res = await plugin.retrieveEvents(
-          cal.id!,
-          RetrieveEventsParams(
-              startDate: now, endDate: now.add(const Duration(hours: 24))),
-        );
-        final events = res.data ?? [];
-        rawCount += events.length;
-        filteredCount += events
-            .where((e) =>
-                e.start != null &&
-                e.start!.toLocal().isAfter(now) &&
-                e.allDay != true)
-            .length;
-      }
+    if (calPerm.isGranted) {
+      try {
+        final now = DateTime.now();
+        final List<dynamic> results =
+            await channel.invokeMethod('getInstances', {
+          'begin': now.millisecondsSinceEpoch,
+          'end': now.add(const Duration(hours: 24)).millisecondsSinceEpoch,
+        });
+        rawCount = results.length;
+        for (final item in results) {
+          final map = Map<String, dynamic>.from(item as Map);
+          final allDay = map['all_day'] as bool? ?? false;
+          if (allDay) continue;
+          final beginMs = map['begin'] as int;
+          final start = DateTime.fromMillisecondsSinceEpoch(beginMs);
+          if (start.isAfter(now)) filteredCount++;
+        }
+      } catch (_) {}
     }
 
     final scheduled = await AlarmService.instance.scheduledAlarms();
@@ -103,9 +101,8 @@ class _HomePageState extends State<HomePage> {
             'Build: $_buildSha\n'
             '${_buildTime.isNotEmpty ? 'Built: $_buildTime\n' : ''}'
             '\n'
-            'Calendar permission: ${hasPerm.data}\n'
-            'Calendars: ${cals.length}\n'
-            'Raw events (24h): $rawCount\n'
+            'Calendar permission: $calPerm\n'
+            'Raw instances (24h): $rawCount\n'
             'Filtered events: $filteredCount\n'
             '\n'
             'Scheduled alarms: ${scheduled.length}\n'
