@@ -1,13 +1,20 @@
+import 'package:flutter/foundation.dart';
+
 import 'alarms.dart';
 import 'calendar.dart';
 import 'settings.dart';
 
 Future<bool> runBackgroundPoll() async {
   try {
+    debugPrint('SOMA: poll start');
     await AlarmService.instance.init();
     final lead = await Settings.leadMinutes();
     final reader = CalendarReader();
     final events = await reader.upcomingEvents();
+    debugPrint('SOMA: calendar returned ${events.length} events');
+    if (events.isNotEmpty) {
+      debugPrint('SOMA: first event: ${events.first.title} at ${events.first.start}');
+    }
 
     final existing = await AlarmService.instance.scheduledAlarms();
     final existingIds = existing.map((e) => e.eventId).toSet();
@@ -17,6 +24,7 @@ Future<bool> runBackgroundPoll() async {
       await AlarmService.instance.cancelForEvent(stale);
     }
 
+    var scheduled = 0;
     for (final ev in events) {
       final leadWhen = ev.start.subtract(Duration(minutes: lead));
       if (leadWhen.isAfter(DateTime.now())) {
@@ -27,6 +35,7 @@ Future<bool> runBackgroundPoll() async {
           location: ev.location,
           isLeadAlarm: true,
         ));
+        scheduled++;
       }
       if (ev.start.isAfter(DateTime.now())) {
         await AlarmService.instance.scheduleEventAlarm(AlarmRecord(
@@ -36,8 +45,10 @@ Future<bool> runBackgroundPoll() async {
           location: ev.location,
           isLeadAlarm: false,
         ));
+        scheduled++;
       }
     }
+    debugPrint('SOMA: scheduled $scheduled alarms');
 
     final morningOn = await Settings.morningEnabled();
     if (morningOn) {
@@ -47,8 +58,10 @@ Future<bool> runBackgroundPoll() async {
     } else {
       await AlarmService.instance.cancelMorningAlarm();
     }
+    debugPrint('SOMA: poll complete');
     return true;
-  } catch (_) {
+  } catch (e, st) {
+    debugPrint('SOMA: poll FAILED: $e\n$st');
     return false;
   }
 }

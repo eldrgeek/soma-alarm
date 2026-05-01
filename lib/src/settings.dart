@@ -9,7 +9,7 @@ class Settings {
   static const _kLeadMinutes = 'lead_minutes';
 
   static const defaultWebhook =
-      'https://contabo-host.example/soma/v1/alarm-event';
+      'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
 
   static Future<String> webhookUrl() async {
     final p = await SharedPreferences.getInstance();

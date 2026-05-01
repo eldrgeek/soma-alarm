@@ -1,3 +1,5 @@
+import 'package:device_calendar/device_calendar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -5,7 +7,11 @@ import 'alarms.dart';
 import 'background.dart';
 import 'calendar.dart';
 import 'checklist_page.dart';
+import 'settings.dart';
 import 'settings_page.dart';
+
+const _buildSha = String.fromEnvironment('BUILD_SHA', defaultValue: 'dev');
+const _buildTime = String.fromEnvironment('BUILD_TIME', defaultValue: '');
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   List<CalendarEventLite> _events = [];
   List<AlarmRecord> _scheduled = [];
   bool _loading = false;
+  String? _lastError;
 
   @override
   void initState() {
@@ -27,26 +34,110 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _loading = true);
-    await _reader.ensurePermissions();
-    final events = await _reader.upcomingEvents();
-    await runBackgroundPoll();
-    final scheduled = await AlarmService.instance.scheduledAlarms();
-    if (!mounted) return;
     setState(() {
-      _events = events;
-      _scheduled = scheduled;
-      _loading = false;
+      _loading = true;
+      _lastError = null;
     });
+    try {
+      await _reader.ensurePermissions();
+      final events = await _reader.upcomingEvents();
+      final pollOk = await runBackgroundPoll();
+      final scheduled = await AlarmService.instance.scheduledAlarms();
+      if (!mounted) return;
+      setState(() {
+        _events = events;
+        _scheduled = scheduled;
+        _loading = false;
+        if (!pollOk) _lastError = 'Background poll returned false';
+      });
+    } catch (e) {
+      debugPrint('SOMA-HOME: refresh error: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _lastError = '$e';
+      });
+    }
+  }
+
+  Future<void> _showDiagnostics() async {
+    final plugin = DeviceCalendarPlugin();
+    final hasPerm = await plugin.hasPermissions();
+    final cals = hasPerm.data == true
+        ? (await plugin.retrieveCalendars()).data ?? []
+        : <Calendar>[];
+
+    final now = DateTime.now();
+    var rawCount = 0;
+    var filteredCount = 0;
+    if (hasPerm.data == true) {
+      for (final cal in cals) {
+        if (cal.id == null) continue;
+        final res = await plugin.retrieveEvents(
+          cal.id!,
+          RetrieveEventsParams(
+              startDate: now, endDate: now.add(const Duration(hours: 24))),
+        );
+        final events = res.data ?? [];
+        rawCount += events.length;
+        filteredCount += events
+            .where((e) =>
+                e.start != null &&
+                e.start!.toLocal().isAfter(now) &&
+                e.allDay != true)
+            .length;
+      }
+    }
+
+    final scheduled = await AlarmService.instance.scheduledAlarms();
+    final webhookUrl = await Settings.webhookUrl();
+    final webhookOn = await Settings.webhookEnabled();
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Diagnostics'),
+        content: SingleChildScrollView(
+          child: Text(
+            'Version: 0.1.0\n'
+            'Build: $_buildSha\n'
+            '${_buildTime.isNotEmpty ? 'Built: $_buildTime\n' : ''}'
+            '\n'
+            'Calendar permission: ${hasPerm.data}\n'
+            'Calendars: ${cals.length}\n'
+            'Raw events (24h): $rawCount\n'
+            'Filtered events: $filteredCount\n'
+            '\n'
+            'Scheduled alarms: ${scheduled.length}\n'
+            '\n'
+            'Webhook: ${webhookOn ? "ON" : "OFF"}\n'
+            'URL: $webhookUrl\n'
+            '${_lastError != null ? '\nLast error: $_lastError' : ''}',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final fmt = DateFormat('EEE MMM d • h:mm a');
+    final isDev = _buildSha == 'dev';
     return Scaffold(
       appBar: AppBar(
         title: const Text('SOMA Alarm'),
+        backgroundColor: isDev ? Colors.deepOrange : null,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Diagnostics',
+            onPressed: _showDiagnostics,
+          ),
           IconButton(
             icon: const Icon(Icons.checklist_rtl),
             tooltip: 'Routines',
@@ -72,6 +163,27 @@ class _HomePageState extends State<HomePage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (isDev)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'v0.1.0 — $_buildSha${_buildTime.isNotEmpty ? ' — $_buildTime' : ''}',
+                  style: TextStyle(
+                    color: Colors.deepOrange.shade200,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            if (_lastError != null)
+              Card(
+                color: Colors.red.shade900,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Error: $_lastError',
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ),
             Text('Upcoming events (24h)',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
