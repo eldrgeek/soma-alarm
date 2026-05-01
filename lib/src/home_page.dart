@@ -1,5 +1,4 @@
 import 'package:device_calendar/device_calendar.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -127,7 +126,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final fmt = DateFormat('EEE MMM d • h:mm a');
-    final isDev = _buildSha == 'dev';
+    const isDev = _buildSha == 'dev';
     return Scaffold(
       appBar: AppBar(
         title: const Text('SOMA Alarm'),
