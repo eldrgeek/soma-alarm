@@ -32,6 +32,16 @@ db.exec(`
     queued_at TEXT DEFAULT (datetime('now')),
     sent_at TEXT
   );
+  CREATE TABLE IF NOT EXISTS installs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    app_version TEXT NOT NULL,
+    build_sha TEXT NOT NULL,
+    installed_at TEXT,
+    received_at TEXT DEFAULT (datetime('now')),
+    verify_code TEXT NOT NULL,
+    ip TEXT
+  );
 `);
 
 const insertEvent = db.prepare(`
@@ -83,6 +93,56 @@ setInterval(prune, 24 * 60 * 60 * 1000);
 
 const app = express();
 app.use(express.json());
+
+const UNAMBIGUOUS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function generateVerifyCode(len = 8) {
+  let code = '';
+  const bytes = require('crypto').randomBytes(len);
+  for (let i = 0; i < len; i++) code += UNAMBIGUOUS[bytes[i] % UNAMBIGUOUS.length];
+  return code;
+}
+
+const insertInstall = db.prepare(`
+  INSERT INTO installs (device_id, app_version, build_sha, installed_at, verify_code, ip)
+  VALUES (@device_id, @app_version, @build_sha, @installed_at, @verify_code, @ip)
+`);
+
+const INSTALL_REQUIRED = ['device_id', 'app_version', 'build_sha'];
+
+app.post('/install', (req, res) => {
+  const body = req.body || {};
+  const missing = INSTALL_REQUIRED.filter(k => !body[k]);
+  if (missing.length) return res.status(400).json({ error: 'missing fields', missing });
+
+  const verifyCode = generateVerifyCode();
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+
+  insertInstall.run({
+    device_id: body.device_id,
+    app_version: body.app_version,
+    build_sha: body.build_sha,
+    installed_at: body.installed_at || null,
+    verify_code: verifyCode,
+    ip: String(ip).split(',')[0].trim(),
+  });
+
+  insertEvent.run({
+    event_id: `install-${body.device_id}`,
+    title: `Install: ${body.device_id}`,
+    action: 'install',
+    scheduled_time: body.installed_at || null,
+    fired_time: null,
+    location: null,
+    source: 'soma-alarm-android',
+  });
+
+  res.status(201).json({
+    ok: true,
+    verify_code: verifyCode,
+    server_time: new Date().toISOString(),
+    message: 'soma-webhook reachable',
+  });
+});
 
 const REQUIRED = ['event_id', 'title', 'action', 'source'];
 
