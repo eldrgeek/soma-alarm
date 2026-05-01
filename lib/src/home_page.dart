@@ -84,8 +84,18 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _fireTestAlarm() async {
+    await AlarmService.instance.scheduleTestAlarm();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Test alarm scheduled — fires in 5 seconds.')),
+    );
+  }
+
   Future<void> _showDiagnostics() async {
     final calPerm = await Permission.calendarFullAccess.status;
+    final notifPerm = await Permission.notification.status;
+    final exactAlarmPerm = await Permission.scheduleExactAlarm.status;
 
     const channel = MethodChannel('org.esr.soma_alarm/calendar');
     var rawCount = 0;
@@ -114,38 +124,90 @@ class _HomePageState extends State<HomePage> {
     final webhookUrl = await Settings.webhookUrl();
     final webhookOn = await Settings.webhookEnabled();
 
+    final permDenied = !calPerm.isGranted ||
+        !notifPerm.isGranted ||
+        !exactAlarmPerm.isGranted;
+
     if (!mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Diagnostics'),
         content: SingleChildScrollView(
-          child: Text(
-            'Version: 0.1.0\n'
-            'Build: $_buildSha\n'
-            '${_buildTime.isNotEmpty ? 'Built: $_buildTime\n' : ''}'
-            '\n'
-            'Calendar permission: $calPerm\n'
-            'Raw instances (24h): $rawCount\n'
-            'Filtered events: $filteredCount\n'
-            '\n'
-            'Scheduled alarms: ${scheduled.length}\n'
-            '\n'
-            'Webhook: ${webhookOn ? "ON" : "OFF"}\n'
-            'URL: $webhookUrl\n'
-            '${_lastError != null ? '\nLast error: $_lastError' : ''}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Version: 0.1.0\n'
+                'Build: $_buildSha\n'
+                '${_buildTime.isNotEmpty ? 'Built: $_buildTime\n' : ''}',
+              ),
+              const SizedBox(height: 8),
+              Text('PERMISSIONS',
+                  style: Theme.of(ctx).textTheme.titleSmall),
+              const SizedBox(height: 4),
+              _permRow('Calendar', calPerm),
+              _permRow('Notifications', notifPerm),
+              _permRow('Alarms & reminders', exactAlarmPerm),
+              if (permDenied) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.settings, size: 18),
+                    label: const Text('Open app settings'),
+                    onPressed: () => openAppSettings(),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                'Calendar\n'
+                '  Raw instances (24h): $rawCount\n'
+                '  Filtered events: $filteredCount\n'
+                '\n'
+                'Scheduled alarms: ${scheduled.length}\n'
+                '\n'
+                'Webhook: ${webhookOn ? "ON" : "OFF"}\n'
+                'URL: $webhookUrl\n'
+                '${_lastError != null ? '\nLast error: $_lastError' : ''}',
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              await _fireTestAlarm();
+            },
+            child: const Text('Test Alarm'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
               await _forceCalendarSync();
             },
-            child: const Text('Force Calendar Sync'),
+            child: const Text('Force Sync'),
           ),
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Widget _permRow(String label, PermissionStatus status) {
+    final granted = status.isGranted;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(granted ? Icons.check_circle : Icons.error,
+              size: 16, color: granted ? Colors.green : Colors.red),
+          const SizedBox(width: 8),
+          Text('$label: ${granted ? "granted" : status.name}'),
         ],
       ),
     );
