@@ -6,6 +6,7 @@ class CalendarEventLite {
   final String id;
   final String title;
   final DateTime start;
+  final DateTime? end;
   final String? location;
   final String calendarId;
 
@@ -13,6 +14,7 @@ class CalendarEventLite {
     required this.id,
     required this.title,
     required this.start,
+    this.end,
     required this.location,
     required this.calendarId,
   });
@@ -56,11 +58,16 @@ class CalendarReader {
         final beginMs = map['begin'] as int;
         final start = DateTime.fromMillisecondsSinceEpoch(beginMs);
         if (start.isBefore(now) || start.isAfter(end)) continue;
+        final endMs = map['end'] as int?;
+        final eventEnd = endMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(endMs)
+            : null;
         final title = (map['title'] as String?)?.trim();
         out.add(CalendarEventLite(
           id: map['event_id'] as String? ?? '$beginMs',
           title: (title != null && title.isNotEmpty) ? title : '(no title)',
           start: start,
+          end: eventEnd,
           location: map['location'] as String?,
           calendarId: map['calendar_id'] as String? ?? '',
         ));

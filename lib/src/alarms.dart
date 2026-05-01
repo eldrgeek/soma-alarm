@@ -16,6 +16,7 @@ const String _kOldMorningChannel = 'soma_morning_alarm';
 
 const String kActionSnooze5 = 'snooze5';
 const String kActionSnooze10 = 'snooze10';
+const String kActionSnooze15 = 'snooze15';
 const String kActionDismiss = 'dismiss';
 const String kActionFire = 'fire';
 const String kActionMorning = 'morning';
@@ -27,6 +28,8 @@ class AlarmRecord {
   final String? location;
   final bool dismissed;
   final bool isLeadAlarm;
+  final DateTime? eventStart;
+  final DateTime? firedAt;
 
   AlarmRecord({
     required this.eventId,
@@ -35,7 +38,20 @@ class AlarmRecord {
     this.location,
     this.dismissed = false,
     this.isLeadAlarm = true,
+    this.eventStart,
+    this.firedAt,
   });
+
+  AlarmRecord copyWith({DateTime? firedAt}) => AlarmRecord(
+        eventId: eventId,
+        title: title,
+        scheduled: scheduled,
+        location: location,
+        dismissed: dismissed,
+        isLeadAlarm: isLeadAlarm,
+        eventStart: eventStart,
+        firedAt: firedAt ?? this.firedAt,
+      );
 
   Map<String, dynamic> toJson() => {
         'event_id': eventId,
@@ -44,6 +60,8 @@ class AlarmRecord {
         'location': location,
         'dismissed': dismissed,
         'is_lead': isLeadAlarm,
+        if (eventStart != null) 'event_start': eventStart!.toIso8601String(),
+        if (firedAt != null) 'fired_at': firedAt!.toIso8601String(),
       };
 
   factory AlarmRecord.fromJson(Map<String, dynamic> j) => AlarmRecord(
@@ -53,6 +71,12 @@ class AlarmRecord {
         location: j['location'] as String?,
         dismissed: (j['dismissed'] as bool?) ?? false,
         isLeadAlarm: (j['is_lead'] as bool?) ?? true,
+        eventStart: j['event_start'] != null
+            ? DateTime.parse(j['event_start'] as String)
+            : null,
+        firedAt: j['fired_at'] != null
+            ? DateTime.parse(j['fired_at'] as String)
+            : null,
       );
 }
 
@@ -138,6 +162,29 @@ class AlarmService {
             cancelNotification: true, showsUserInterface: false),
         AndroidNotificationAction(kActionSnooze10, 'Snooze 10',
             cancelNotification: true, showsUserInterface: false),
+        AndroidNotificationAction(kActionSnooze15, 'Snooze 15',
+            cancelNotification: true, showsUserInterface: false),
+        AndroidNotificationAction(kActionDismiss, 'Dismiss',
+            cancelNotification: true, showsUserInterface: false),
+      ],
+    );
+  }
+
+  AndroidNotificationDetails _backstopDetails() {
+    return AndroidNotificationDetails(
+      kEventChannel,
+      'Calendar event alarms',
+      channelDescription: 'Alarms fired before calendar events.',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.alarm,
+      fullScreenIntent: true,
+      playSound: true,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList(<int>[0, 500, 200, 500, 200, 500]),
+      actions: const <AndroidNotificationAction>[
         AndroidNotificationAction(kActionDismiss, 'Dismiss',
             cancelNotification: true, showsUserInterface: false),
       ],
@@ -165,12 +212,13 @@ class AlarmService {
     final id = _idFor(rec.eventId, lead: rec.isLeadAlarm);
     final tzWhen = tz.TZDateTime.from(rec.scheduled, tz.local);
     if (tzWhen.isBefore(tz.TZDateTime.now(tz.local))) return;
+    final details = rec.isLeadAlarm ? _eventDetails() : _backstopDetails();
     await _plugin.zonedSchedule(
       id,
       rec.title,
       _alarmBody(rec),
       tzWhen,
-      NotificationDetails(android: _eventDetails()),
+      NotificationDetails(android: details),
       androidScheduleMode: AndroidScheduleMode.alarmClock,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -276,6 +324,25 @@ class AlarmService {
     await p.setStringList(_kScheduledKey, existing);
   }
 
+  Future<void> markFired(AlarmRecord rec) async {
+    final fired = rec.copyWith(firedAt: DateTime.now());
+    await _persistScheduled(fired);
+  }
+
+  Future<void> scrubStaleRecords() async {
+    final p = await SharedPreferences.getInstance();
+    final existing = p.getStringList(_kScheduledKey) ?? <String>[];
+    final now = DateTime.now();
+    existing.removeWhere((s) {
+      final j = jsonDecode(s) as Map<String, dynamic>;
+      final sched = DateTime.parse(j['scheduled'] as String);
+      if (j['fired_at'] != null) return true;
+      if (sched.add(const Duration(seconds: 60)).isBefore(now)) return true;
+      return false;
+    });
+    await p.setStringList(_kScheduledKey, existing);
+  }
+
   Future<void> _onAction(NotificationResponse resp) async {
     await _handleResponse(resp);
   }
@@ -309,14 +376,41 @@ class AlarmService {
     final svc = AlarmService.instance;
     await svc.init();
 
-    if (actionId == kActionSnooze5 || actionId == kActionSnooze10) {
-      final mins = actionId == kActionSnooze5 ? 5 : 10;
+    await svc.markFired(rec);
+
+    if (actionId == kActionSnooze5 ||
+        actionId == kActionSnooze10 ||
+        actionId == kActionSnooze15) {
+      final mins = actionId == kActionSnooze5
+          ? 5
+          : actionId == kActionSnooze10
+              ? 10
+              : 15;
+      final now = DateTime.now();
+      var newWhen = now.add(Duration(minutes: mins));
+      final evStart = rec.eventStart;
+
+      if (evStart != null && !newWhen.isBefore(evStart)) {
+        if (now.isBefore(evStart)) {
+          await svc.scheduleEventAlarm(AlarmRecord(
+            eventId: rec.eventId,
+            title: rec.title,
+            scheduled: evStart,
+            location: rec.location,
+            isLeadAlarm: false,
+            eventStart: evStart,
+          ));
+        }
+        return;
+      }
+
       final snoozed = AlarmRecord(
         eventId: rec.eventId,
         title: rec.title,
-        scheduled: DateTime.now().add(Duration(minutes: mins)),
+        scheduled: newWhen,
         location: rec.location,
         isLeadAlarm: rec.isLeadAlarm,
+        eventStart: evStart,
       );
       await svc.scheduleEventAlarm(snoozed);
     } else if (actionId == kActionDismiss) {

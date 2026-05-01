@@ -20,7 +20,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _reader = CalendarReader();
   List<CalendarEventLite> _events = [];
   List<AlarmRecord> _scheduled = [];
@@ -30,7 +30,21 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refresh();
+    }
   }
 
   Future<void> _refresh() async {
@@ -40,13 +54,19 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       await _reader.ensurePermissions();
+      await AlarmService.instance.scrubStaleRecords();
       final events = await _reader.upcomingEvents();
       final pollOk = await runBackgroundPoll();
       final scheduled = await AlarmService.instance.scheduledAlarms();
+      final now = DateTime.now();
       if (!mounted) return;
       setState(() {
-        _events = events;
-        _scheduled = scheduled;
+        _events = events
+            .where((e) => (e.end ?? e.start).isAfter(now))
+            .toList();
+        _scheduled = scheduled
+            .where((a) => a.firedAt == null && a.isLeadAlarm)
+            .toList();
         _loading = false;
         if (!pollOk) _lastError = 'Background poll returned false';
       });
@@ -308,12 +328,9 @@ class _HomePageState extends State<HomePage> {
               ),
             ..._scheduled.map((a) => Card(
                   child: ListTile(
-                    leading: Icon(a.isLeadAlarm
-                        ? Icons.alarm
-                        : Icons.notifications_active),
+                    leading: const Icon(Icons.alarm),
                     title: Text(a.title),
-                    subtitle: Text(
-                        '${a.isLeadAlarm ? "Lead" : "Start"} • ${fmt.format(a.scheduled.toLocal())}'),
+                    subtitle: Text(fmt.format(a.scheduled.toLocal())),
                   ),
                 )),
           ],

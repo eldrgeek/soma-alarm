@@ -16,11 +16,16 @@ Future<bool> runBackgroundPoll() async {
       debugPrint('SOMA: first event: ${events.first.title} at ${events.first.start}');
     }
 
+    await AlarmService.instance.scrubStaleRecords();
+
     final existing = await AlarmService.instance.scheduledAlarms();
-    final existingIds = existing.map((e) => e.eventId).toSet();
+    final activeIds = existing
+        .where((e) => e.firedAt == null)
+        .map((e) => e.eventId)
+        .toSet();
     final liveIds = events.map((e) => e.stableId).toSet();
 
-    for (final stale in existingIds.difference(liveIds)) {
+    for (final stale in activeIds.difference(liveIds)) {
       await AlarmService.instance.cancelForEvent(stale);
     }
 
@@ -34,6 +39,7 @@ Future<bool> runBackgroundPoll() async {
           scheduled: leadWhen,
           location: ev.location,
           isLeadAlarm: true,
+          eventStart: ev.start,
         ));
         scheduled++;
       }
@@ -44,6 +50,7 @@ Future<bool> runBackgroundPoll() async {
           scheduled: ev.start,
           location: ev.location,
           isLeadAlarm: false,
+          eventStart: ev.start,
         ));
         scheduled++;
       }
