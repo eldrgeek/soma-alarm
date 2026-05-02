@@ -414,7 +414,11 @@ class AlarmService {
       );
       await svc.scheduleEventAlarm(snoozed);
     } else if (actionId == kActionDismiss) {
-      await svc.cancelAlarm(rec.eventId, lead: rec.isLeadAlarm);
+      if (rec.isLeadAlarm) {
+        await svc.cancelForEvent(rec.eventId);
+      } else {
+        await svc.cancelAlarm(rec.eventId, lead: false);
+      }
     }
   }
 }

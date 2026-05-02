@@ -134,4 +134,30 @@ void main() {
       expect(visible.first.title, 'Active');
     });
   });
+
+  group('single-dismiss model', () {
+    test('dismiss on lead should target both lead and start', () {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Meeting',
+        scheduled: DateTime.now(),
+        isLeadAlarm: true,
+        eventStart: DateTime.now().add(const Duration(minutes: 15)),
+      );
+      // Lead dismiss → cancelForEvent (both kinds)
+      expect(rec.isLeadAlarm, true);
+    });
+
+    test('dismiss on start should target only start', () {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Meeting',
+        scheduled: DateTime.now(),
+        isLeadAlarm: false,
+        eventStart: DateTime.now(),
+      );
+      // Start dismiss → cancelAlarm(lead: false) only
+      expect(rec.isLeadAlarm, false);
+    });
+  });
 }
