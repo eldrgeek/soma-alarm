@@ -281,13 +281,15 @@ class AlarmService {
 
   Future<void> cancelMorningAlarm() => _plugin.cancel(0xCAFE);
 
-  Future<void> scheduleTestAlarm() async {
-    final when = DateTime.now().add(const Duration(seconds: 5));
+  Future<void> scheduleTestAlarm({Duration delay = const Duration(seconds: 30)}) async {
+    final when = DateTime.now().add(delay);
+    final fakeEventStart = when.add(const Duration(minutes: 15));
     await scheduleEventAlarm(AlarmRecord(
       eventId: 'test-alarm-${when.millisecondsSinceEpoch}',
       title: 'Test alarm',
       scheduled: when,
-      isLeadAlarm: false,
+      isLeadAlarm: true,
+      eventStart: fakeEventStart,
     ));
   }
 

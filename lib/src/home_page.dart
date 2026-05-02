@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +14,7 @@ import 'settings_page.dart';
 
 const _buildSha = String.fromEnvironment('BUILD_SHA', defaultValue: 'dev');
 const _buildTime = String.fromEnvironment('BUILD_TIME', defaultValue: '');
+const _buildChangelog = String.fromEnvironment('BUILD_CHANGELOG', defaultValue: '');
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -26,6 +29,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<AlarmRecord> _scheduled = [];
   bool _loading = false;
   String? _lastError;
+  DateTime? _testAlarmTime;
+  Timer? _testCountdownTimer;
 
   @override
   void initState() {
@@ -36,6 +41,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _testCountdownTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -104,12 +110,64 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _fireTestAlarm() async {
-    await AlarmService.instance.scheduleTestAlarm();
+  Future<void> _showTestAlarmPicker() async {
+    final delay = await showDialog<Duration>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Test alarm in...'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in {
+              '30 seconds': const Duration(seconds: 30),
+              '60 seconds': const Duration(seconds: 60),
+              '5 minutes': const Duration(minutes: 5),
+            }.entries)
+              SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: FilledButton.tonal(
+                    onPressed: () => Navigator.pop(ctx, entry.value),
+                    child: Text(entry.key),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (delay == null || !mounted) return;
+    await AlarmService.instance.scheduleTestAlarm(delay: delay);
+    _startTestCountdown(delay);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test alarm scheduled — fires in 5 seconds.')),
+      SnackBar(content: Text('Test alarm scheduled — fires in ${delay.inSeconds}s.')),
     );
+  }
+
+  void _startTestCountdown(Duration delay) {
+    _testCountdownTimer?.cancel();
+    setState(() => _testAlarmTime = DateTime.now().add(delay));
+    _testCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        _testCountdownTimer?.cancel();
+        return;
+      }
+      final remaining = _testAlarmTime!.difference(DateTime.now());
+      if (remaining.isNegative) {
+        _testCountdownTimer?.cancel();
+        setState(() => _testAlarmTime = null);
+      } else {
+        setState(() {});
+      }
+    });
   }
 
   Future<void> _showDiagnostics() async {
@@ -193,6 +251,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 'URL: $webhookUrl\n'
                 '${_lastError != null ? '\nLast error: $_lastError' : ''}',
               ),
+              if (_buildChangelog.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('RECENT CHANGES',
+                    style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                ...(_buildChangelog.split('|').map((line) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 1),
+                      child: Text(
+                        line.trim(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ))),
+              ],
             ],
           ),
         ),
@@ -200,7 +274,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await _fireTestAlarm();
+              await _showTestAlarmPicker();
             },
             child: const Text('Test Alarm'),
           ),
@@ -229,6 +303,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           const SizedBox(width: 8),
           Text('$label: ${granted ? "granted" : status.name}'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTestCountdown() {
+    final remaining = _testAlarmTime!.difference(DateTime.now());
+    final secs = remaining.isNegative ? 0 : remaining.inSeconds;
+    final m = (secs ~/ 60).toString();
+    final s = (secs % 60).toString().padLeft(2, '0');
+    return Card(
+      color: Colors.deepPurple.shade800,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.timer, size: 20),
+            const SizedBox(width: 12),
+            Text('Test alarm in $m:$s',
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 16)),
+          ],
+        ),
       ),
     );
   }
@@ -293,6 +388,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       style: const TextStyle(color: Colors.white)),
                 ),
               ),
+            if (_testAlarmTime != null) ...[
+              _buildTestCountdown(),
+              const SizedBox(height: 12),
+            ],
             Text('Upcoming events (24h)',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),

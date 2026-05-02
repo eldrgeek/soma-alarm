@@ -27,9 +27,11 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: |
+          CHANGELOG=$(git log --oneline -5 | tr '\n' '|' | sed 's/|$//')
           flutter build apk --release \
             --dart-define=BUILD_SHA=$(git rev-parse --short HEAD) \
-            --dart-define=BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            --dart-define=BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+            --dart-define="BUILD_CHANGELOG=$CHANGELOG"
 
       - uses: actions/upload-artifact@v4
         with:
