@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soma_alarm/src/alarms.dart';
+import 'package:soma_alarm/src/alarm_action_screen.dart';
 import 'package:soma_alarm/src/calendar.dart';
+import 'package:flutter/material.dart';
 
 void main() {
   group('AlarmRecord', () {
@@ -144,7 +146,6 @@ void main() {
         isLeadAlarm: true,
         eventStart: DateTime.now().add(const Duration(minutes: 15)),
       );
-      // Lead dismiss → cancelForEvent (both kinds)
       expect(rec.isLeadAlarm, true);
     });
 
@@ -156,8 +157,129 @@ void main() {
         isLeadAlarm: false,
         eventStart: DateTime.now(),
       );
-      // Start dismiss → cancelAlarm(lead: false) only
       expect(rec.isLeadAlarm, false);
+    });
+  });
+
+  group('AlarmActionScreen', () {
+    testWidgets('renders title, countdown, and action buttons', (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Team Standup',
+        scheduled: DateTime.now(),
+        location: 'Room 42',
+        isLeadAlarm: true,
+        eventStart: DateTime.now().add(const Duration(minutes: 10)),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Team Standup'), findsOneWidget);
+      expect(find.text('Room 42'), findsOneWidget);
+      expect(find.text('Snooze 5'), findsOneWidget);
+      expect(find.text('Snooze 10'), findsOneWidget);
+      expect(find.text('Snooze 15'), findsOneWidget);
+      expect(find.text('Dismiss'), findsOneWidget);
+      expect(find.text('Starts in'), findsOneWidget);
+    });
+
+    testWidgets('hides snooze buttons for T=0 backstop alarm', (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Team Standup',
+        scheduled: DateTime.now(),
+        isLeadAlarm: false,
+        eventStart: DateTime.now(),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Team Standup'), findsOneWidget);
+      expect(find.text('Snooze 5'), findsNothing);
+      expect(find.text('Snooze 10'), findsNothing);
+      expect(find.text('Snooze 15'), findsNothing);
+      expect(find.text('Dismiss'), findsOneWidget);
+    });
+
+    testWidgets('hides snooze when past event start', (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Past Event',
+        scheduled: DateTime.now().subtract(const Duration(minutes: 5)),
+        isLeadAlarm: true,
+        eventStart: DateTime.now().subtract(const Duration(minutes: 1)),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Past Event'), findsOneWidget);
+      expect(find.text('Snooze 5'), findsNothing);
+      expect(find.text('Event started'), findsOneWidget);
+    });
+
+    testWidgets('disables snooze buttons that would exceed event start',
+        (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Soon',
+        scheduled: DateTime.now(),
+        isLeadAlarm: true,
+        eventStart: DateTime.now().add(const Duration(minutes: 3)),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      final snooze5 = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Snooze 5'),
+      );
+      expect(snooze5.onPressed, isNull);
+
+      final snooze10 = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Snooze 10'),
+      );
+      expect(snooze10.onPressed, isNull);
+    });
+
+    testWidgets('shows location when present', (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Meeting',
+        scheduled: DateTime.now(),
+        location: 'Conference Room B',
+        isLeadAlarm: true,
+        eventStart: DateTime.now().add(const Duration(minutes: 10)),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Conference Room B'), findsOneWidget);
+      expect(find.byIcon(Icons.location_on), findsOneWidget);
+    });
+
+    testWidgets('hides location when absent', (tester) async {
+      final rec = AlarmRecord(
+        eventId: 'e1',
+        title: 'Meeting',
+        scheduled: DateTime.now(),
+        isLeadAlarm: true,
+        eventStart: DateTime.now().add(const Duration(minutes: 10)),
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: AlarmActionScreen(record: rec),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.location_on), findsNothing);
     });
   });
 }

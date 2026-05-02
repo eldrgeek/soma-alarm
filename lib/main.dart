@@ -15,6 +15,11 @@ void callbackDispatcher() {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AlarmService.instance.init();
+
+  AlarmService.instance.onNotificationTap = navigateToAlarmAction;
+
+  final launchRec = await AlarmService.instance.getLaunchAlarmRecord();
+
   await Workmanager().initialize(callbackDispatcher);
   await Workmanager().registerPeriodicTask(
     'soma-calendar-poll',
@@ -23,4 +28,10 @@ Future<void> main() async {
     existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
   );
   runApp(const SomaAlarmApp());
+
+  if (launchRec != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      navigateToAlarmAction(launchRec);
+    });
+  }
 }

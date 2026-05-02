@@ -90,6 +90,8 @@ class AlarmService {
 
   static const String _kScheduledKey = 'scheduled_alarms';
 
+  void Function(AlarmRecord)? onNotificationTap;
+
   Future<void> init() async {
     if (_initialized) return;
     tzdata.initializeTimeZones();
@@ -152,6 +154,8 @@ class AlarmService {
       priority: Priority.high,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
+      autoCancel: false,
+      ongoing: true,
       playSound: true,
       sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
       audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -179,6 +183,8 @@ class AlarmService {
       priority: Priority.high,
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
+      autoCancel: false,
+      ongoing: true,
       playSound: true,
       sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
       audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -324,6 +330,20 @@ class AlarmService {
     await p.setStringList(_kScheduledKey, existing);
   }
 
+  Future<void> cancelNotification(String eventId, {required bool lead}) async {
+    await _plugin.cancel(_idFor(eventId, lead: lead));
+  }
+
+  Future<AlarmRecord?> getLaunchAlarmRecord() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    final resp = details.notificationResponse;
+    if (resp == null || resp.payload == null) return null;
+    final j = jsonDecode(resp.payload!) as Map<String, dynamic>;
+    if (j['kind'] == 'morning') return null;
+    return AlarmRecord.fromJson(j);
+  }
+
   Future<void> markFired(AlarmRecord rec) async {
     final fired = rec.copyWith(firedAt: DateTime.now());
     await _persistScheduled(fired);
@@ -344,6 +364,18 @@ class AlarmService {
   }
 
   Future<void> _onAction(NotificationResponse resp) async {
+    if (resp.notificationResponseType ==
+            NotificationResponseType.selectedNotification &&
+        resp.payload != null) {
+      final j = jsonDecode(resp.payload!) as Map<String, dynamic>;
+      if (j['kind'] == 'morning') {
+        await _handleResponse(resp);
+        return;
+      }
+      final rec = AlarmRecord.fromJson(j);
+      onNotificationTap?.call(rec);
+      return;
+    }
     await _handleResponse(resp);
   }
 

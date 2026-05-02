@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'alarm_action_screen.dart';
+import 'alarms.dart';
 import 'home_page.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
+
+void navigateToAlarmAction(AlarmRecord rec) {
+  navigatorKey.currentState?.push(
+    MaterialPageRoute(builder: (_) => AlarmActionScreen(record: rec)),
+  );
+}
 
 class SomaAlarmApp extends StatelessWidget {
   const SomaAlarmApp({super.key});
@@ -12,6 +22,7 @@ class SomaAlarmApp extends StatelessWidget {
       brightness: Brightness.dark,
     );
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'SOMA Alarm',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
