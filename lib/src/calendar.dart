@@ -23,7 +23,7 @@ class CalendarEventLite {
 }
 
 class CalendarReader {
-  static const _channel = MethodChannel('org.esr.soma_alarm/calendar');
+  static const _channel = MethodChannel('org.esr.sidekick/calendar');
 
   Future<bool> ensurePermissions() async {
     var status = await Permission.calendarFullAccess.status;

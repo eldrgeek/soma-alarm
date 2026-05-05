@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soma_alarm/src/alarms.dart';
-import 'package:soma_alarm/src/alarm_action_screen.dart';
-import 'package:soma_alarm/src/calendar.dart';
+import 'package:sidekick/src/alarms.dart';
+import 'package:sidekick/src/alarm_action_screen.dart';
+import 'package:sidekick/src/calendar.dart';
 import 'package:flutter/material.dart';
 
 void main() {

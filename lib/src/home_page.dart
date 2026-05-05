@@ -87,7 +87,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _forceCalendarSync() async {
-    const channel = MethodChannel('org.esr.soma_alarm/calendar');
+    const channel = MethodChannel('org.esr.sidekick/calendar');
     try {
       final result = await channel.invokeMethod<bool>('requestSync');
       if (!mounted) return;
@@ -175,7 +175,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final notifPerm = await Permission.notification.status;
     final exactAlarmPerm = await Permission.scheduleExactAlarm.status;
 
-    const channel = MethodChannel('org.esr.soma_alarm/calendar');
+    const channel = MethodChannel('org.esr.sidekick/calendar');
     var rawCount = 0;
     var filteredCount = 0;
     if (calPerm.isGranted) {

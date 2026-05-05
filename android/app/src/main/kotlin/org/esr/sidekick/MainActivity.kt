@@ -1,4 +1,4 @@
-package org.esr.soma_alarm
+package org.esr.sidekick
 
 import android.accounts.AccountManager
 import android.content.ContentResolver
@@ -13,7 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.esr.soma_alarm/calendar")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.esr.sidekick/calendar")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getInstances" -> {

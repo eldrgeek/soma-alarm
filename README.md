@@ -1,4 +1,4 @@
-# SOMA Alarm
+# Sidekick (Android)
 
 Android (Flutter) calendar alarm + morning routine app for the SOMA stack.
 

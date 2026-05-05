@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "org.esr.soma_alarm"
+    namespace = "org.esr.sidekick"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "org.esr.soma_alarm"
+        applicationId = "org.esr.sidekick"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26

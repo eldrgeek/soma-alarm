@@ -1,5 +1,5 @@
-name: soma_alarm
-description: Pulse — calendar alarm + morning routine for Mike's Pixel.
+name: sidekick
+description: "Sidekick (Pixel) — calendar alarm + morning routine. User-facing brand: Pulse."
 publish_to: 'none'
 version: 0.1.0+2
 
