@@ -313,12 +313,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final m = (secs ~/ 60).toString();
     final s = (secs % 60).toString().padLeft(2, '0');
     return Card(
-      color: Colors.deepPurple.shade800,
+      color: Theme.of(context).colorScheme.primaryContainer,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Icon(Icons.timer, size: 20),
+            Icon(Icons.timer, size: 20, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 12),
             Text('Test alarm in $m:$s',
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 16)),
@@ -334,7 +334,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     const isDev = _buildSha == 'dev';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SOMA Alarm'),
+        title: const Text('Pulse'),
         backgroundColor: isDev ? Colors.deepOrange : null,
         actions: [
           IconButton(

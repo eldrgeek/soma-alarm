@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../theme/theme_provider.dart';
 import 'alarm_action_screen.dart';
 import 'alarms.dart';
 import 'home_page.dart';
@@ -17,21 +19,15 @@ class SomaAlarmApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF7C4DFF),
-      brightness: Brightness.dark,
-    );
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'SOMA Alarm',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: colorScheme.surface,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) => MaterialApp(
+        navigatorKey: navigatorKey,
+        title: 'Pulse',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.dark,
+        darkTheme: themeProvider.themeData,
+        home: const HomePage(),
       ),
-      home: const HomePage(),
     );
   }
 }

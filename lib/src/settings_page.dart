@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
+import '../theme/theme_provider.dart';
 import 'alarms.dart';
 import 'background.dart';
 import 'settings.dart';
@@ -176,6 +178,19 @@ class _SettingsPageState extends State<SettingsPage> {
               }
             },
           ),
+          const Divider(height: 32),
+          Text('Pulse style', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          ...PulseStyle.values.map((style) {
+            final tp = context.watch<ThemeProvider>();
+            return RadioListTile<PulseStyle>(
+              title: Text(style.displayName),
+              subtitle: Text(style.subtitle),
+              value: style,
+              groupValue: tp.style,
+              onChanged: (v) => tp.setStyle(v!),
+            );
+          }),
           const SizedBox(height: 32),
           FilledButton.icon(
             onPressed: _save,

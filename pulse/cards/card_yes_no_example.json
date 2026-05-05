@@ -1,0 +1,49 @@
+{
+  "id": "card_01HW4K3M2P8RJ9T6V7C0B1D3E",
+  "schema_version": "1.0",
+  "type": "yes_no",
+  "title": "Did you make it to the dentist?",
+  "body": "Park Meadows Dental ended 25 min ago.",
+  "actions": [
+    {
+      "id": "yes",
+      "label": "Yes",
+      "action_type": "respond",
+      "value": true,
+      "style": "primary",
+      "lock_screen": true
+    },
+    {
+      "id": "no",
+      "label": "No",
+      "action_type": "respond",
+      "value": false,
+      "style": "secondary",
+      "lock_screen": true
+    },
+    {
+      "id": "later",
+      "label": "Still there",
+      "action_type": "snooze",
+      "value": 30,
+      "style": "secondary",
+      "lock_screen": false
+    }
+  ],
+  "created_at": "2026-05-03T18:42:11Z",
+  "expires_at": null,
+  "priority": "normal",
+  "urgency": "async",
+  "source_dispatch_id": "msg_dental_followup_20260503",
+  "source_agent": "mae",
+  "target_user": "mike",
+  "signature": "hmac-sha256=a3f8c2d1e9b47f6e0c3a8d5f2b9e4c7a1d6f3b0e7c4a2d5f8b1e9c3a6d0f4b7",
+  "type_data": {
+    "yes_label": "Yes",
+    "no_label": "No",
+    "later_enabled": true,
+    "later_delay_minutes": 30
+  },
+  "state": "delivered",
+  "response": null
+}

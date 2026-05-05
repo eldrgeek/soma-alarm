@@ -185,4 +185,190 @@ app.get('/events', (req, res) => {
   res.json(rows);
 });
 
+// ─── Pulse card endpoints ──────────────────────────────────────────────────
+// Phase 0 stub. Cards stored in SQLite; FCM delivery stubbed until
+// PULSE_FCM_SERVER_KEY is configured in env.
+
+const crypto = require('crypto');
+
+const PULSE_HMAC_SECRET = process.env.PULSE_HMAC_SECRET || '';
+const PULSE_FCM_SERVER_KEY = process.env.PULSE_FCM_SERVER_KEY || '';
+const PULSE_ENV = process.env.PULSE_ENV || 'development';
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pulse_cards (
+    id TEXT PRIMARY KEY,
+    schema_version TEXT NOT NULL DEFAULT '1.0',
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    card_json TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'created',
+    priority TEXT NOT NULL DEFAULT 'normal',
+    urgency TEXT NOT NULL DEFAULT 'async',
+    source_dispatch_id TEXT,
+    source_agent TEXT,
+    target_user TEXT NOT NULL DEFAULT 'mike',
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    responded_at INTEGER,
+    fcm_message_id TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_pulse_state ON pulse_cards(state);
+  CREATE INDEX IF NOT EXISTS idx_pulse_created ON pulse_cards(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS pulse_devices (
+    user_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    fcm_token TEXT NOT NULL,
+    device_auth_token TEXT NOT NULL,
+    registered_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, device_id)
+  );
+`);
+
+function validatePulseSignature(body, sigHeader) {
+  if (PULSE_ENV === 'development') return true;
+  if (!PULSE_HMAC_SECRET) return false;
+  if (!sigHeader || !sigHeader.startsWith('hmac-sha256=')) return false;
+  const provided = sigHeader.slice('hmac-sha256='.length);
+  const { id, schema_version, type, title, created_at } = body;
+  const payload = [id, schema_version, type, title, created_at].join(':');
+  const expected = crypto.createHmac('sha256', PULSE_HMAC_SECRET).update(payload).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(expected, 'hex'));
+}
+
+async function deliverVisFCM(card, fcmToken) {
+  if (!PULSE_FCM_SERVER_KEY || !fcmToken) return null;
+  const payload = JSON.stringify({
+    to: fcmToken,
+    priority: 'high',
+    data: {
+      pulse_card_id: card.id,
+      card_type: card.type,
+      title: card.title,
+      priority: card.priority,
+      urgency: card.urgency,
+    },
+    android: { priority: 'HIGH' },
+  });
+  try {
+    const res = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `key=${PULSE_FCM_SERVER_KEY}`,
+      },
+      body: payload,
+    });
+    if (!res.ok) { console.error(`FCM error: ${res.status}`); return null; }
+    const data = await res.json();
+    return data.results?.[0]?.message_id || null;
+  } catch (err) {
+    console.error('FCM delivery failed:', err.message);
+    return null;
+  }
+}
+
+const insertCard = db.prepare(`
+  INSERT INTO pulse_cards (id, schema_version, type, title, body, card_json, state, priority, urgency, source_dispatch_id, source_agent, target_user, created_at, expires_at)
+  VALUES (@id, @schema_version, @type, @title, @body, @card_json, 'created', @priority, @urgency, @source_dispatch_id, @source_agent, @target_user, @created_at, @expires_at)
+`);
+const updateCardState = db.prepare(`UPDATE pulse_cards SET state = @state, fcm_message_id = @fcm_message_id WHERE id = @id`);
+const respondCard = db.prepare(`UPDATE pulse_cards SET state = 'responded', responded_at = @responded_at, card_json = @card_json WHERE id = @id`);
+const getCard = db.prepare(`SELECT * FROM pulse_cards WHERE id = ?`);
+const listCards = db.prepare(`SELECT * FROM pulse_cards WHERE state NOT IN ('responded','dismissed','expired') ORDER BY created_at DESC LIMIT ?`);
+const getDevice = db.prepare(`SELECT * FROM pulse_devices WHERE user_id = ? ORDER BY registered_at DESC LIMIT 1`);
+
+app.post('/pulse/cards', async (req, res) => {
+  const card = req.body || {};
+  const sig = req.headers['x-pulse-signature'] || '';
+  if (!validatePulseSignature(card, sig)) return res.status(401).json({ error: 'invalid signature' });
+
+  const required = ['id', 'type', 'title', 'created_at', 'source_dispatch_id', 'target_user'];
+  const missing = required.filter(k => !card[k]);
+  if (missing.length) return res.status(422).json({ error: 'missing fields', missing });
+
+  const createdMs = new Date(card.created_at).getTime();
+  const expiresMs = card.expires_at ? new Date(card.expires_at).getTime() : null;
+
+  insertCard.run({
+    id: card.id,
+    schema_version: card.schema_version || '1.0',
+    type: card.type,
+    title: card.title,
+    body: card.body || null,
+    card_json: JSON.stringify(card),
+    priority: card.priority || 'normal',
+    urgency: card.urgency || 'async',
+    source_dispatch_id: card.source_dispatch_id,
+    source_agent: card.source_agent || null,
+    target_user: card.target_user,
+    created_at: createdMs,
+    expires_at: expiresMs,
+  });
+
+  const device = getDevice.get(card.target_user);
+  const fcmToken = device?.fcm_token || null;
+  const fcmMessageId = await deliverVisFCM(card, fcmToken);
+  const state = fcmMessageId ? 'delivered' : (fcmToken ? 'failed' : 'created');
+  updateCardState.run({ id: card.id, state, fcm_message_id: fcmMessageId });
+
+  res.status(201).json({
+    id: card.id,
+    state,
+    fcm_message_id: fcmMessageId,
+    delivered_at: fcmMessageId ? new Date().toISOString() : null,
+    stub: !PULSE_FCM_SERVER_KEY,
+  });
+});
+
+app.get('/pulse/cards', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+  const rows = listCards.all(limit);
+  res.json(rows.map(r => ({ ...r, card_json: JSON.parse(r.card_json) })));
+});
+
+app.get('/pulse/cards/:id', (req, res) => {
+  const row = getCard.get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  res.json({ ...row, card_json: JSON.parse(row.card_json) });
+});
+
+app.post('/pulse/cards/:id/respond', (req, res) => {
+  const row = getCard.get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+
+  const { action_id, value, responded_at, source_surface, checklist_state } = req.body || {};
+  if (!action_id) return res.status(422).json({ error: 'missing action_id' });
+
+  const card = JSON.parse(row.card_json);
+  card.state = 'responded';
+  card.response = { action_id, value, responded_at: responded_at || new Date().toISOString(), source_surface: source_surface || 'pulse_android', checklist_state: checklist_state || null };
+
+  respondCard.run({ id: req.params.id, responded_at: new Date(card.response.responded_at).getTime(), card_json: JSON.stringify(card) });
+
+  // Synthesize a Dispatch message (stub — wire to actual Dispatch channel when ready)
+  const dispatchMsg = `[via Pulse] ${card.title}: ${action_id}${value !== undefined ? ` (${value})` : ''}`;
+  console.log(`DISPATCH: ${dispatchMsg}`);
+
+  res.json({ id: req.params.id, state: 'responded', dispatch_message: dispatchMsg });
+});
+
+app.post('/pulse/register', (req, res) => {
+  const { user_id, fcm_token, device_id, device_auth_token } = req.body || {};
+  if (!user_id || !fcm_token || !device_id || !device_auth_token) {
+    return res.status(422).json({ error: 'missing fields' });
+  }
+  db.prepare(`INSERT OR REPLACE INTO pulse_devices (user_id, device_id, fcm_token, device_auth_token) VALUES (?, ?, ?, ?)`)
+    .run(user_id, device_id, fcm_token, device_auth_token);
+  res.json({ ok: true, registered_at: new Date().toISOString() });
+});
+
+app.get('/pulse/health', (_req, res) => {
+  const cardCount = db.prepare('SELECT COUNT(*) AS n FROM pulse_cards').get().n;
+  res.json({ status: 'ok', fcm_connected: Boolean(PULSE_FCM_SERVER_KEY), env: PULSE_ENV, card_count: cardCount });
+});
+// ─── end Pulse ─────────────────────────────────────────────────────────────
+
 app.listen(PORT, () => console.log(`soma-webhook listening on :${PORT}`));

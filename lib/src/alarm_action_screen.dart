@@ -168,8 +168,8 @@ class _AlarmActionScreenState extends State<AlarmActionScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   color: _pastEventStart
-                      ? Colors.red.withAlpha(40)
-                      : Colors.deepPurple.withAlpha(40),
+                      ? Theme.of(context).colorScheme.error.withAlpha(40)
+                      : Theme.of(context).colorScheme.primary.withAlpha(40),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(

@@ -1,0 +1,55 @@
+{
+  "id": "card_01HW4K3M2P8RJ9T6V7C0B1D3G",
+  "schema_version": "1.0",
+  "type": "permission",
+  "title": "Yeshie needs Drive access",
+  "body": "Allow Yeshie to read and write files in your Google Drive on your behalf.",
+  "actions": [
+    {
+      "id": "allow",
+      "label": "Allow",
+      "action_type": "respond",
+      "value": "allow",
+      "style": "primary",
+      "lock_screen": true
+    },
+    {
+      "id": "deny",
+      "label": "Deny",
+      "action_type": "respond",
+      "value": "deny",
+      "style": "destructive",
+      "lock_screen": true
+    },
+    {
+      "id": "defer",
+      "label": "Later",
+      "action_type": "snooze",
+      "value": 60,
+      "style": "secondary",
+      "lock_screen": false
+    }
+  ],
+  "created_at": "2026-05-03T14:00:00Z",
+  "expires_at": null,
+  "priority": "high",
+  "urgency": "blocking",
+  "source_dispatch_id": "msg_yeshie_gdrive_oauth_20260503",
+  "source_agent": "yeshie",
+  "target_user": "mike",
+  "signature": "hmac-sha256=c4a8f2e6b9d1c5f3a7e2b6d0c4f8a2e5b9d3c7f1a5e9b3d7c1f5a9e3b7d2c6f0",
+  "type_data": {
+    "scope_summary": "Allow Yeshie to read and write files in your Google Drive on your behalf.",
+    "scope_raw": [
+      "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/drive.file"
+    ],
+    "risk_level": "medium",
+    "service_name": "Google Drive",
+    "requester_skill": "google-oauth-setup",
+    "yeshie_session_id": "ys_7f3a9c2b",
+    "screenshot_ref": null
+  },
+  "state": "delivered",
+  "response": null
+}

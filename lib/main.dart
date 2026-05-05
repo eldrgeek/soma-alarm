@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'src/alarms.dart';
 import 'src/app.dart';
 import 'src/background.dart';
+import 'theme/theme_provider.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -14,10 +16,12 @@ void callbackDispatcher() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final themeProvider = ThemeProvider();
+  await themeProvider.load();
+
   await AlarmService.instance.init();
-
   AlarmService.instance.onNotificationTap = navigateToAlarmAction;
-
   final launchRec = await AlarmService.instance.getLaunchAlarmRecord();
 
   await Workmanager().initialize(callbackDispatcher);
@@ -27,7 +31,13 @@ Future<void> main() async {
     frequency: const Duration(minutes: 15),
     existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
   );
-  runApp(const SomaAlarmApp());
+
+  runApp(
+    ChangeNotifierProvider.value(
+      value: themeProvider,
+      child: const SomaAlarmApp(),
+    ),
+  );
 
   if (launchRec != null) {
     WidgetsBinding.instance.addPostFrameCallback((_) {

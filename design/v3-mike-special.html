@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOMA Alarm — V3 Forge</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700;9..144,900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forge-black: #0A0A0C;
+    --ember: #FF6B35;
+    --ember-deep: #D4522A;
+    --ember-glow: rgba(255, 107, 53, 0.12);
+    --ember-hot: rgba(255, 107, 53, 0.06);
+    --molten: #FFB347;
+    --molten-dim: rgba(255, 179, 71, 0.6);
+    --steel: #E8E4E0;
+    --steel-dim: rgba(232, 228, 224, 0.65);
+    --steel-ghost: rgba(232, 228, 224, 0.35);
+    --graphite: #1A1A1E;
+    --graphite-light: #252528;
+    --graphite-lighter: #2E2E32;
+    --carbon: #141416;
+    --electric: #4ECDC4;
+    --electric-glow: rgba(78, 205, 196, 0.12);
+    --danger: #FF4444;
+    --danger-glow: rgba(255, 68, 68, 0.15);
+    --success: #4ECDC4;
+    --dev-accent: #FF6B35;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-xs: 6px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: #050506;
+    color: var(--steel);
+    min-height: 100vh;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    padding: 32px;
+    justify-content: center;
+  }
+
+  .screen-label {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ember);
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .phone {
+    width: 375px;
+    height: 812px;
+    border-radius: 40px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 107, 53, 0.1);
+    box-shadow: var(--shadow), 0 0 60px rgba(255, 107, 53, 0.04);
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* ========== HOME SCREEN ========== */
+  .home {
+    background: var(--forge-black);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Forge heat glow at bottom */
+  .home::after {
+    content: '';
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 120px;
+    background: radial-gradient(ellipse, rgba(255, 107, 53, 0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .appbar {
+    padding: 54px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 2;
+  }
+
+  .appbar-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .appbar-logo {
+    font-family: 'Fraunces', serif;
+    font-size: 26px;
+    font-weight: 900;
+    color: var(--ember);
+    letter-spacing: -1px;
+  }
+
+  .appbar-sub {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--steel-ghost);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .appbar-actions {
+    display: flex;
+    gap: 2px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-xs);
+    border: none;
+    background: transparent;
+    color: var(--steel-ghost);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--graphite-light); color: var(--steel); }
+
+  .dev-banner {
+    margin: 0 20px 6px;
+    padding: 4px 10px;
+    background: rgba(255, 107, 53, 0.06);
+    border-left: 2px solid var(--ember);
+    font-size: 11px;
+    color: var(--dev-accent);
+    font-family: monospace;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 20px 12px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .status-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--graphite);
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--steel-dim);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .status-dot.live { background: var(--electric); box-shadow: 0 0 6px rgba(78, 205, 196, 0.4); }
+  .status-dot.warn { background: var(--molten); box-shadow: 0 0 6px rgba(255, 179, 71, 0.4); }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 24px;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Next-up hero card */
+  .next-up {
+    background: linear-gradient(135deg, var(--graphite-light) 0%, var(--graphite) 100%);
+    border: 1px solid rgba(255, 107, 53, 0.12);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .next-up::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--ember), var(--molten), var(--ember));
+  }
+
+  @keyframes heat-shimmer {
+    0%, 100% { opacity: 0.03; }
+    50% { opacity: 0.06; }
+  }
+
+  .next-up::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(180deg, transparent, rgba(255, 107, 53, 0.02));
+    animation: heat-shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .next-up-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-bottom: 10px;
+  }
+
+  .next-up-title {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--steel);
+    line-height: 1.2;
+  }
+
+  .next-up-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--steel-dim);
+  }
+
+  .next-up-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--ember-glow);
+    border-radius: var(--radius-xs);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ember);
+    font-family: 'Space Grotesk', sans-serif;
+    margin-top: 12px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    margin-top: 4px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--steel-ghost);
+  }
+
+  .section-count {
+    font-size: 11px;
+    color: var(--steel-ghost);
+    background: var(--graphite);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .event-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--graphite);
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .event-row:hover { border-color: rgba(255, 107, 53, 0.08); }
+
+  .event-time-col {
+    width: 52px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .event-time-val {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--steel);
+  }
+
+  .event-time-ampm {
+    font-size: 10px;
+    color: var(--steel-ghost);
+    text-transform: uppercase;
+  }
+
+  .event-pipe {
+    width: 2px;
+    height: 32px;
+    background: var(--graphite-lighter);
+    border-radius: 1px;
+    flex-shrink: 0;
+  }
+  .event-pipe.hot { background: var(--ember); box-shadow: 0 0 8px rgba(255, 107, 53, 0.2); }
+
+  .event-details { flex: 1; min-width: 0; }
+
+  .event-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--steel);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .event-loc {
+    font-size: 12px;
+    color: var(--steel-ghost);
+    margin-top: 2px;
+  }
+
+  .event-delta {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--steel-ghost);
+    flex-shrink: 0;
+  }
+  .event-delta.soon { color: var(--ember); }
+
+  .alarm-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: var(--radius-sm);
+  }
+
+  .alarm-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--electric);
+    box-shadow: 0 0 6px rgba(78, 205, 196, 0.3);
+    flex-shrink: 0;
+  }
+
+  .alarm-name {
+    font-size: 13px;
+    color: var(--steel-dim);
+    flex: 1;
+  }
+
+  .alarm-when {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--steel);
+    font-family: monospace;
+  }
+
+  .spacer { height: 20px; }
+
+  .rule {
+    height: 1px;
+    background: var(--graphite-light);
+    margin: 4px 0;
+  }
+
+  /* ========== SETTINGS ========== */
+  .settings {
+    background: var(--forge-black);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .setting-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-top: 24px;
+    margin-bottom: 10px;
+  }
+  .setting-group-label:first-child { margin-top: 0; }
+
+  .setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--graphite);
+  }
+
+  .setting-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--steel);
+  }
+
+  .setting-sublabel {
+    font-size: 12px;
+    color: var(--steel-ghost);
+    margin-top: 2px;
+  }
+
+  .setting-input {
+    background: var(--graphite);
+    border: 1px solid var(--graphite-lighter);
+    border-radius: var(--radius-sm);
+    color: var(--steel);
+    padding: 12px 14px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    margin-top: 8px;
+    transition: border-color 0.15s;
+  }
+  .setting-input:focus {
+    outline: none;
+    border-color: var(--ember);
+    box-shadow: 0 0 0 2px var(--ember-glow);
+  }
+
+  .toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: var(--graphite-lighter);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.on { background: var(--ember); }
+  .toggle::after {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: white;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  .dropdown {
+    background: var(--graphite);
+    border: 1px solid var(--graphite-lighter);
+    border-radius: var(--radius-xs);
+    color: var(--steel);
+    padding: 6px 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+  }
+
+  .save-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--ember);
+    color: white;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 28px;
+    box-shadow: 0 4px 16px rgba(255, 107, 53, 0.25);
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+  .save-btn:hover { background: var(--ember-deep); }
+
+  /* ========== ALARM NOTIFICATION ========== */
+  .alarm-screen {
+    background: var(--forge-black);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Forge glow animation */
+  @keyframes forge-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.02); }
+  }
+
+  @keyframes ring-expand {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.15; }
+    100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  }
+
+  .alarm-screen::before {
+    content: '';
+    position: absolute;
+    top: 35%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 250px;
+    height: 250px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.08) 0%, transparent 60%);
+    animation: forge-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .alarm-screen::after {
+    content: '';
+    position: absolute;
+    top: 35%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 107, 53, 0.08);
+    animation: ring-expand 3s ease-out infinite;
+    pointer-events: none;
+  }
+
+  .alarm-urgency {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .alarm-event-title {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--steel);
+    text-align: center;
+    line-height: 1.15;
+    position: relative;
+    z-index: 1;
+  }
+
+  .alarm-event-time {
+    font-size: 15px;
+    color: var(--steel-dim);
+    margin-top: 8px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .alarm-location {
+    font-size: 13px;
+    color: var(--steel-ghost);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .countdown-display {
+    margin-top: 36px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .countdown-number {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 72px;
+    font-weight: 700;
+    color: var(--steel);
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .countdown-number span {
+    color: var(--ember);
+  }
+
+  .countdown-unit {
+    font-size: 12px;
+    color: var(--steel-ghost);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .alarm-actions {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    margin-top: auto;
+  }
+
+  .snooze-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .snooze-btn {
+    flex: 1;
+    padding: 14px 8px;
+    border: 1px solid var(--graphite-lighter);
+    border-radius: var(--radius-sm);
+    background: var(--graphite);
+    color: var(--steel-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .snooze-btn:hover {
+    border-color: rgba(255, 107, 53, 0.2);
+    color: var(--steel);
+  }
+
+  .dismiss-btn {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--danger);
+    color: white;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(255, 68, 68, 0.2);
+    letter-spacing: 0.5px;
+  }
+
+  /* ========== DIAGNOSTICS ========== */
+  .diag-screen {
+    background: var(--forge-black);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .diag-dialog {
+    background: var(--graphite);
+    border: 1px solid var(--graphite-lighter);
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 100%;
+    box-shadow: var(--shadow);
+  }
+
+  .diag-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .diag-title {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--steel);
+  }
+
+  .diag-version {
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--steel-ghost);
+    background: var(--carbon);
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+  }
+
+  .diag-section {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-top: 16px;
+    margin-bottom: 6px;
+  }
+  .diag-section:first-of-type { margin-top: 8px; }
+
+  .diag-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+  }
+
+  .diag-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--steel-dim);
+  }
+
+  .diag-row.full { grid-column: 1 / -1; }
+
+  .diag-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .diag-dot.ok { background: var(--success); }
+  .diag-dot.err { background: var(--danger); }
+
+  .diag-mono {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--steel-ghost);
+    word-break: break-all;
+    background: var(--carbon);
+    padding: 6px 8px;
+    border-radius: var(--radius-xs);
+    margin-top: 4px;
+  }
+
+  .diag-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 18px;
+  }
+
+  .diag-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--graphite-lighter);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--steel-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+  }
+  .diag-btn.primary {
+    background: var(--ember-glow);
+    border-color: rgba(255, 107, 53, 0.15);
+    color: var(--ember);
+  }
+
+  /* ========== LAYOUT ========== */
+  .page-header {
+    text-align: center;
+    margin-bottom: 40px;
+    width: 100%;
+  }
+  .page-header h1 {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--ember);
+  }
+  .page-header p {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    color: var(--steel-ghost);
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>V3 — The Forge</h1>
+  <p>Dark carbon, ember orange, bold typography. The app as a forge — where ideas become actions.</p>
+</div>
+
+<!-- HOME SCREEN -->
+<div>
+  <div class="screen-label">Home</div>
+  <div class="phone">
+    <div class="home">
+      <div class="appbar">
+        <div class="appbar-brand">
+          <div class="appbar-logo">SOMA</div>
+          <div class="appbar-sub">alarm</div>
+        </div>
+        <div class="appbar-actions">
+          <button class="icon-btn">&#x1f41b;</button>
+          <button class="icon-btn">&#x2611;</button>
+          <button class="icon-btn">&#x2699;</button>
+          <button class="icon-btn">&#x21bb;</button>
+        </div>
+      </div>
+
+      <div class="dev-banner">v0.1.0 — dev — 2026-05-01</div>
+
+      <div class="status-bar">
+        <div class="status-chip"><div class="status-dot live"></div> Webhook</div>
+        <div class="status-chip"><div class="status-dot live"></div> Calendar</div>
+        <div class="status-chip"><div class="status-dot warn"></div> 4 alarms</div>
+      </div>
+
+      <div class="content">
+        <!-- Hero: next event -->
+        <div class="next-up">
+          <div class="next-up-label">Next up</div>
+          <div class="next-up-title">Greg Morning Call</div>
+          <div class="next-up-meta">
+            <span>8:00 AM</span>
+            <span>&bull;</span>
+            <span>Zoom</span>
+          </div>
+          <div class="next-up-countdown">&#x26A1; 42 min</div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Today</div>
+          <div class="section-count">3 events</div>
+        </div>
+
+        <div class="event-row">
+          <div class="event-time-col">
+            <div class="event-time-val">8:00</div>
+            <div class="event-time-ampm">AM</div>
+          </div>
+          <div class="event-pipe hot"></div>
+          <div class="event-details">
+            <div class="event-name">Greg Morning Call</div>
+            <div class="event-loc">Zoom</div>
+          </div>
+          <div class="event-delta soon">42m</div>
+        </div>
+
+        <div class="event-row">
+          <div class="event-time-col">
+            <div class="event-time-val">5:00</div>
+            <div class="event-time-ampm">PM</div>
+          </div>
+          <div class="event-pipe"></div>
+          <div class="event-details">
+            <div class="event-name">Oom Yung Doe — Dojo</div>
+          </div>
+          <div class="event-delta">9h</div>
+        </div>
+
+        <div class="event-row">
+          <div class="event-time-col">
+            <div class="event-time-val">10:00</div>
+            <div class="event-time-ampm">AM</div>
+          </div>
+          <div class="event-pipe"></div>
+          <div class="event-details">
+            <div class="event-name">Eric Kohner — Coaching</div>
+            <div class="event-loc">Tomorrow</div>
+          </div>
+          <div class="event-delta">tmrw</div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="rule"></div>
+        <div class="spacer"></div>
+
+        <div class="section-header">
+          <div class="section-title">Alarms</div>
+          <div class="section-count">3 armed</div>
+        </div>
+
+        <div class="alarm-row">
+          <div class="alarm-indicator"></div>
+          <div class="alarm-name">Greg Call (lead)</div>
+          <div class="alarm-when">07:45</div>
+        </div>
+
+        <div class="alarm-row">
+          <div class="alarm-indicator"></div>
+          <div class="alarm-name">Dojo (lead)</div>
+          <div class="alarm-when">16:45</div>
+        </div>
+
+        <div class="alarm-row">
+          <div class="alarm-indicator" style="background: var(--molten); box-shadow: 0 0 6px rgba(255, 179, 71, 0.3);"></div>
+          <div class="alarm-name">Morning Routine</div>
+          <div class="alarm-when">07:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div>
+  <div class="screen-label">Settings</div>
+  <div class="phone">
+    <div class="settings">
+      <div class="appbar">
+        <div class="appbar-brand">
+          <div class="appbar-logo" style="font-size: 20px;">Settings</div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="setting-group-label">Webhook</div>
+        <input class="setting-input" type="text" value="https://vpsmikewolf.duckdns.org/api/soma/alarm" />
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Send alarm events</div>
+            <div class="setting-sublabel">POST to webhook on every alarm action</div>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+
+        <div class="setting-group-label">Calendar Alarms</div>
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Lead time</div>
+            <div class="setting-sublabel">Minutes before event start</div>
+          </div>
+          <select class="dropdown">
+            <option>5</option>
+            <option>10</option>
+            <option selected>15</option>
+            <option>20</option>
+            <option>30</option>
+            <option>60</option>
+          </select>
+        </div>
+
+        <div class="setting-group-label">Morning Routine</div>
+        <div class="setting-item">
+          <div class="setting-label">Daily morning alarm</div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-label">Time</div>
+          <div style="font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--ember);">07:00</div>
+        </div>
+
+        <button class="save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALARM NOTIFICATION -->
+<div>
+  <div class="screen-label">Alarm Notification</div>
+  <div class="phone">
+    <div class="alarm-screen">
+      <div class="alarm-urgency">&#x26A1; Incoming</div>
+      <div class="alarm-event-title">Greg Morning<br>Call</div>
+      <div class="alarm-event-time">Thu May 1 &bull; 8:00 AM</div>
+      <div class="alarm-location">&#x1f4cd; Zoom</div>
+
+      <div class="countdown-display">
+        <div class="countdown-number">12<span>:</span>34</div>
+        <div class="countdown-unit">minutes remaining</div>
+      </div>
+
+      <div class="alarm-actions">
+        <div class="snooze-row">
+          <button class="snooze-btn">Snooze 5</button>
+          <button class="snooze-btn">Snooze 10</button>
+          <button class="snooze-btn">Snooze 15</button>
+        </div>
+        <button class="dismiss-btn">Dismiss</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIAGNOSTICS -->
+<div>
+  <div class="screen-label">Diagnostics</div>
+  <div class="phone">
+    <div class="diag-screen">
+      <div class="diag-dialog">
+        <div class="diag-header">
+          <div class="diag-title">Diagnostics</div>
+          <div class="diag-version">v0.1.0 &bull; a3f7c2d</div>
+        </div>
+
+        <div class="diag-section">Permissions</div>
+        <div class="diag-grid">
+          <div class="diag-row"><div class="diag-dot ok"></div> Calendar</div>
+          <div class="diag-row"><div class="diag-dot ok"></div> Notifications</div>
+          <div class="diag-row"><div class="diag-dot ok"></div> Exact alarms</div>
+        </div>
+
+        <div class="diag-section">Calendar</div>
+        <div class="diag-grid">
+          <div class="diag-row">Raw (24h): 5</div>
+          <div class="diag-row">Filtered: 3</div>
+        </div>
+
+        <div class="diag-section">Alarms</div>
+        <div class="diag-row">Scheduled: 4</div>
+
+        <div class="diag-section">Webhook</div>
+        <div class="diag-row"><div class="diag-dot ok"></div> Enabled</div>
+        <div class="diag-mono">https://vpsmikewolf.duckdns.org/api/soma/alarm</div>
+
+        <div class="diag-actions">
+          <button class="diag-btn">Test Alarm</button>
+          <button class="diag-btn">Force Sync</button>
+          <button class="diag-btn primary">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

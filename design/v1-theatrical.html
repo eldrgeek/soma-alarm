@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOMA Alarm — V1 Theatrical</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --velvet: #1A0A1E;
+    --velvet-deep: #0D0510;
+    --curtain: #2D1233;
+    --footlight: #E8A838;
+    --footlight-dim: #C4862A;
+    --gold: #D4A853;
+    --gold-soft: rgba(212, 168, 83, 0.15);
+    --spotlight: rgba(232, 168, 56, 0.08);
+    --ivory: #F5EDE0;
+    --ivory-muted: rgba(245, 237, 224, 0.7);
+    --ivory-ghost: rgba(245, 237, 224, 0.4);
+    --rose: #8B3A4A;
+    --rose-glow: rgba(139, 58, 74, 0.3);
+    --success: #4A8B5C;
+    --danger: #8B3A3A;
+    --dev-accent: #E85D2A;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    --shadow-glow: 0 0 40px rgba(232, 168, 56, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Raleway', sans-serif;
+    background: var(--velvet-deep);
+    color: var(--ivory);
+    min-height: 100vh;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    padding: 32px;
+    justify-content: center;
+  }
+
+  h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+  .screen-label {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--footlight);
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .phone {
+    width: 375px;
+    height: 812px;
+    border-radius: 40px;
+    overflow: hidden;
+    border: 2px solid rgba(212, 168, 83, 0.2);
+    box-shadow: var(--shadow), var(--shadow-glow);
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* ========== HOME SCREEN ========== */
+  .home {
+    background: linear-gradient(175deg, var(--curtain) 0%, var(--velvet-deep) 35%, var(--velvet-deep) 100%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .home::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(ellipse, rgba(232, 168, 56, 0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .stage-curtain-left, .stage-curtain-right {
+    position: absolute;
+    top: 0;
+    width: 60px;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .stage-curtain-left {
+    left: 0;
+    background: linear-gradient(90deg, rgba(45, 18, 51, 0.6) 0%, transparent 100%);
+  }
+  .stage-curtain-right {
+    right: 0;
+    background: linear-gradient(-90deg, rgba(45, 18, 51, 0.6) 0%, transparent 100%);
+  }
+
+  .appbar {
+    padding: 54px 20px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 2;
+  }
+
+  .appbar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ivory);
+    letter-spacing: 0.5px;
+  }
+
+  .appbar-title span {
+    color: var(--footlight);
+  }
+
+  .appbar-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--gold-soft);
+    color: var(--gold);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+  .icon-btn:hover { background: rgba(212, 168, 83, 0.25); }
+
+  .dev-banner {
+    margin: 0 20px 8px;
+    padding: 6px 12px;
+    background: rgba(232, 93, 42, 0.15);
+    border: 1px solid rgba(232, 93, 42, 0.3);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--dev-accent);
+    font-family: monospace;
+    position: relative;
+    z-index: 2;
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px 24px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .section-header {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ivory-ghost);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(212, 168, 83, 0.12);
+  }
+
+  .event-card {
+    background: linear-gradient(135deg, rgba(45, 18, 51, 0.6) 0%, rgba(26, 10, 30, 0.8) 100%);
+    border: 1px solid rgba(212, 168, 83, 0.1);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s;
+  }
+  .event-card:hover {
+    border-color: rgba(212, 168, 83, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .event-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--footlight);
+    border-radius: 0 2px 2px 0;
+  }
+
+  .event-card.imminent::before {
+    background: var(--rose);
+    box-shadow: 0 0 12px var(--rose-glow);
+  }
+
+  .event-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--gold-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--footlight);
+    flex-shrink: 0;
+  }
+
+  .event-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .event-info { flex: 1; }
+
+  .event-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ivory);
+    line-height: 1.3;
+  }
+
+  .event-meta {
+    font-size: 13px;
+    color: var(--ivory-ghost);
+    margin-top: 4px;
+    font-weight: 400;
+  }
+
+  .event-countdown {
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    color: var(--footlight);
+    margin-top: 6px;
+    font-weight: 600;
+  }
+
+  .alarm-card {
+    background: linear-gradient(135deg, rgba(45, 18, 51, 0.4) 0%, rgba(26, 10, 30, 0.6) 100%);
+    border: 1px solid rgba(212, 168, 83, 0.08);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .alarm-icon {
+    font-size: 18px;
+    color: var(--gold);
+  }
+
+  .alarm-title {
+    font-size: 14px;
+    color: var(--ivory);
+    flex: 1;
+  }
+
+  .alarm-time {
+    font-size: 13px;
+    color: var(--ivory-muted);
+    font-family: 'Playfair Display', serif;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 24px;
+    color: var(--ivory-ghost);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .spacer { height: 28px; }
+
+  /* Footlight glow at bottom */
+  .footlight-bar {
+    height: 2px;
+    background: linear-gradient(90deg, transparent 5%, var(--footlight) 30%, var(--footlight) 70%, transparent 95%);
+    opacity: 0.3;
+    margin: 0 20px;
+  }
+
+  /* ========== SETTINGS SCREEN ========== */
+  .settings {
+    background: linear-gradient(175deg, var(--curtain) 0%, var(--velvet-deep) 30%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .settings .content { padding-top: 8px; }
+
+  .setting-group-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--footlight);
+    margin-top: 20px;
+    margin-bottom: 12px;
+  }
+  .setting-group-label:first-child { margin-top: 0; }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(212, 168, 83, 0.06);
+  }
+
+  .setting-label {
+    font-size: 15px;
+    color: var(--ivory);
+  }
+
+  .setting-sublabel {
+    font-size: 12px;
+    color: var(--ivory-ghost);
+    margin-top: 2px;
+  }
+
+  .setting-input {
+    background: rgba(45, 18, 51, 0.6);
+    border: 1px solid rgba(212, 168, 83, 0.15);
+    border-radius: var(--radius-sm);
+    color: var(--ivory);
+    padding: 10px 14px;
+    font-family: 'Raleway', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .setting-input:focus {
+    outline: none;
+    border-color: var(--footlight);
+    box-shadow: 0 0 0 3px rgba(232, 168, 56, 0.1);
+  }
+
+  .toggle {
+    width: 48px;
+    height: 28px;
+    border-radius: 14px;
+    background: rgba(212, 168, 83, 0.2);
+    position: relative;
+    cursor: pointer;
+  }
+  .toggle.on { background: var(--footlight); }
+  .toggle::after {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--ivory);
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  .dropdown {
+    background: rgba(45, 18, 51, 0.6);
+    border: 1px solid rgba(212, 168, 83, 0.15);
+    border-radius: var(--radius-sm);
+    color: var(--ivory);
+    padding: 8px 12px;
+    font-family: 'Raleway', sans-serif;
+    font-size: 14px;
+  }
+
+  .save-btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--footlight) 0%, var(--footlight-dim) 100%);
+    color: var(--velvet-deep);
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 24px;
+    box-shadow: 0 4px 20px rgba(232, 168, 56, 0.25);
+    letter-spacing: 0.5px;
+  }
+  .save-btn:hover { box-shadow: 0 4px 28px rgba(232, 168, 56, 0.35); }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212, 168, 83, 0.15), transparent);
+    margin: 8px 0;
+  }
+
+  /* ========== ALARM NOTIFICATION ========== */
+  .alarm-screen {
+    background: radial-gradient(ellipse at 50% 30%, rgba(139, 58, 74, 0.3) 0%, var(--velvet-deep) 60%);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .alarm-screen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at 50% 20%, rgba(232, 168, 56, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  /* Animated spotlight sweep */
+  @keyframes spotlight {
+    0%, 100% { transform: translateX(-30px); opacity: 0.04; }
+    50% { transform: translateX(30px); opacity: 0.08; }
+  }
+
+  .alarm-screen::after {
+    content: '';
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(232, 168, 56, 0.08) 0%, transparent 60%);
+    animation: spotlight 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .alarm-event-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--ivory);
+    text-align: center;
+    line-height: 1.2;
+    position: relative;
+    z-index: 1;
+  }
+
+  .alarm-event-time {
+    font-family: 'Raleway', sans-serif;
+    font-size: 16px;
+    color: var(--ivory-muted);
+    margin-top: 8px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .alarm-location {
+    font-size: 14px;
+    color: var(--ivory-ghost);
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .countdown-box {
+    margin-top: 40px;
+    padding: 24px 48px;
+    background: rgba(139, 58, 74, 0.15);
+    border: 1px solid rgba(139, 58, 74, 0.25);
+    border-radius: 20px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .countdown-label {
+    font-size: 13px;
+    color: var(--ivory-ghost);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .countdown-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--ivory);
+    letter-spacing: 2px;
+  }
+
+  .alarm-actions {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    margin-top: auto;
+  }
+
+  .snooze-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .snooze-btn {
+    flex: 1;
+    padding: 14px;
+    border: 1px solid rgba(212, 168, 83, 0.2);
+    border-radius: var(--radius);
+    background: rgba(45, 18, 51, 0.6);
+    color: var(--gold);
+    font-family: 'Raleway', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .snooze-btn:hover {
+    background: rgba(212, 168, 83, 0.1);
+    border-color: rgba(212, 168, 83, 0.35);
+  }
+
+  .dismiss-btn {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, #8B3A3A, #6B2A2A);
+    color: var(--ivory);
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(139, 58, 58, 0.3);
+    letter-spacing: 0.5px;
+  }
+
+  /* ========== DIAGNOSTICS ========== */
+  .diag-screen {
+    background: var(--velvet-deep);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .diag-dialog {
+    background: linear-gradient(170deg, var(--curtain), var(--velvet-deep));
+    border: 1px solid rgba(212, 168, 83, 0.15);
+    border-radius: 24px;
+    padding: 28px;
+    width: 100%;
+    box-shadow: var(--shadow), var(--shadow-glow);
+  }
+
+  .diag-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ivory);
+    margin-bottom: 20px;
+  }
+
+  .diag-section {
+    font-family: 'Raleway', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--footlight);
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+  .diag-section:first-of-type { margin-top: 0; }
+
+  .diag-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--ivory-muted);
+  }
+
+  .diag-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .diag-dot.ok { background: var(--success); box-shadow: 0 0 6px rgba(74, 139, 92, 0.4); }
+  .diag-dot.err { background: var(--danger); box-shadow: 0 0 6px rgba(139, 58, 58, 0.4); }
+
+  .diag-mono {
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--ivory-ghost);
+    margin-top: 4px;
+  }
+
+  .diag-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    justify-content: flex-end;
+  }
+
+  .diag-btn {
+    padding: 10px 16px;
+    border: 1px solid rgba(212, 168, 83, 0.2);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--gold);
+    font-family: 'Raleway', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .diag-btn.primary {
+    background: var(--gold-soft);
+    border-color: rgba(212, 168, 83, 0.3);
+  }
+
+  /* ========== LAYOUT TITLE ========== */
+  .page-header {
+    text-align: center;
+    margin-bottom: 40px;
+    width: 100%;
+  }
+  .page-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    color: var(--footlight);
+  }
+  .page-header p {
+    font-size: 14px;
+    color: var(--ivory-ghost);
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>V1 — Theatrical</h1>
+  <p>Deep velvet, warm footlight gold, stage curtain motif. FrontRow meets Pixel.</p>
+</div>
+
+<!-- HOME SCREEN -->
+<div>
+  <div class="screen-label">Home</div>
+  <div class="phone">
+    <div class="home">
+      <div class="stage-curtain-left"></div>
+      <div class="stage-curtain-right"></div>
+
+      <div class="appbar">
+        <div class="appbar-title"><span>SOMA</span> Alarm</div>
+        <div class="appbar-actions">
+          <button class="icon-btn">&#x1f41b;</button>
+          <button class="icon-btn">&#x2611;</button>
+          <button class="icon-btn">&#x2699;</button>
+          <button class="icon-btn">&#x21bb;</button>
+        </div>
+      </div>
+
+      <div class="dev-banner">v0.1.0 — dev — 2026-05-01</div>
+
+      <div class="content">
+        <div class="section-header">Upcoming Events</div>
+
+        <div class="event-card imminent">
+          <div class="event-row">
+            <div class="event-icon">&#x1f3ad;</div>
+            <div class="event-info">
+              <div class="event-title">Greg Morning Call</div>
+              <div class="event-meta">Thu May 1 &bull; 8:00 AM &bull; Zoom</div>
+              <div class="event-countdown">&#9201; Starts in 42m</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="event-card">
+          <div class="event-row">
+            <div class="event-icon">&#x1f9d8;</div>
+            <div class="event-info">
+              <div class="event-title">Oom Yung Doe — Dojo</div>
+              <div class="event-meta">Thu May 1 &bull; 5:00 PM</div>
+              <div class="event-countdown">&#9201; 9h 42m</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="event-card">
+          <div class="event-row">
+            <div class="event-icon">&#x1f4de;</div>
+            <div class="event-info">
+              <div class="event-title">Eric Kohner — Coaching</div>
+              <div class="event-meta">Fri May 2 &bull; 10:00 AM</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="footlight-bar"></div>
+        <div class="spacer"></div>
+
+        <div class="section-header">Scheduled Alarms</div>
+
+        <div class="alarm-card">
+          <div class="alarm-icon">&#x1f514;</div>
+          <div class="alarm-title">Greg Morning Call (lead)</div>
+          <div class="alarm-time">7:45 AM</div>
+        </div>
+
+        <div class="alarm-card">
+          <div class="alarm-icon">&#x1f514;</div>
+          <div class="alarm-title">Oom Yung Doe (lead)</div>
+          <div class="alarm-time">4:45 PM</div>
+        </div>
+
+        <div class="alarm-card">
+          <div class="alarm-icon">&#x1f305;</div>
+          <div class="alarm-title">Morning Routine</div>
+          <div class="alarm-time">7:00 AM daily</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div>
+  <div class="screen-label">Settings</div>
+  <div class="phone">
+    <div class="settings">
+      <div class="appbar">
+        <div class="appbar-title">Settings</div>
+      </div>
+      <div class="content">
+        <div class="setting-group-label">Webhook</div>
+        <input class="setting-input" type="text" value="https://vpsmikewolf.duckdns.org/api/soma/alarm" />
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Send alarm events</div>
+            <div class="setting-sublabel">POST to webhook on every alarm action</div>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="setting-group-label">Calendar Alarms</div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Lead time before event</div>
+            <div class="setting-sublabel">How early to fire the warning alarm</div>
+          </div>
+          <select class="dropdown">
+            <option>5 min</option>
+            <option>10 min</option>
+            <option selected>15 min</option>
+            <option>20 min</option>
+            <option>30 min</option>
+            <option>60 min</option>
+          </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="setting-group-label">Morning Routine</div>
+        <div class="setting-row">
+          <div class="setting-label">Daily morning alarm</div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Time</div>
+          <div style="font-family: 'Playfair Display', serif; font-size: 18px; color: var(--footlight); font-weight: 700;">07:00</div>
+        </div>
+
+        <button class="save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALARM NOTIFICATION -->
+<div>
+  <div class="screen-label">Alarm Notification</div>
+  <div class="phone">
+    <div class="alarm-screen">
+      <div class="alarm-event-title">Greg Morning Call</div>
+      <div class="alarm-event-time">Thu May 1 &bull; 8:00 AM</div>
+      <div class="alarm-location">&#x1f4cd; Zoom</div>
+
+      <div class="countdown-box">
+        <div class="countdown-label">Starts in</div>
+        <div class="countdown-value">12m 34s</div>
+      </div>
+
+      <div class="alarm-actions">
+        <div class="snooze-row">
+          <button class="snooze-btn">Snooze 5</button>
+          <button class="snooze-btn">Snooze 10</button>
+          <button class="snooze-btn">Snooze 15</button>
+        </div>
+        <button class="dismiss-btn">Dismiss</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIAGNOSTICS -->
+<div>
+  <div class="screen-label">Diagnostics</div>
+  <div class="phone">
+    <div class="diag-screen">
+      <div class="diag-dialog">
+        <div class="diag-title">Diagnostics</div>
+
+        <div class="diag-mono">Version 0.1.0 &bull; Build: a3f7c2d &bull; 2026-05-01</div>
+
+        <div class="diag-section">Permissions</div>
+        <div class="diag-row"><div class="diag-dot ok"></div> Calendar: granted</div>
+        <div class="diag-row"><div class="diag-dot ok"></div> Notifications: granted</div>
+        <div class="diag-row"><div class="diag-dot ok"></div> Alarms & reminders: granted</div>
+
+        <div class="diag-section">Calendar</div>
+        <div class="diag-row">Raw instances (24h): 5</div>
+        <div class="diag-row">Filtered events: 3</div>
+
+        <div class="diag-section">Alarms</div>
+        <div class="diag-row">Scheduled: 4</div>
+
+        <div class="diag-section">Webhook</div>
+        <div class="diag-row"><div class="diag-dot ok"></div> Enabled</div>
+        <div class="diag-mono" style="margin-top: 4px;">https://vpsmikewolf.duckdns.org/api/soma/alarm</div>
+
+        <div class="diag-actions">
+          <button class="diag-btn">Test Alarm</button>
+          <button class="diag-btn">Force Sync</button>
+          <button class="diag-btn primary">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
