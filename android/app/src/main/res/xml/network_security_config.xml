@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pulse only ever talks to two endpoints:
+    1. Mike's Yeshie relay — LAN IP (192.168.x.x) or Tailscale name
+       (mikes-mac, *.ts.net). These are localhost-equivalent and don't
+       have TLS — localhost doesn't do https.
+    2. The SOMA webhook on Contabo over HTTPS.
+
+  Android's <domain> rules don't accept CIDR, so enumerating every LAN
+  IP / mDNS suffix produces a brittle config that breaks the moment
+  Mike's router hands out a different lease. Setting the BASE config to
+  cleartext-permitted instead is the right answer for this app: the
+  destination is gated by the user-controlled "Relay URL" setting,
+  HTTPS is still chosen automatically wherever it's available (the
+  webhook, any future cloud endpoints), and we don't have to chase the
+  network topology.
+
+  Trade-off explicitly: a malicious network operator could intercept
+  traffic to a future plaintext endpoint we add. Pulse never sends
+  credentials or PII over HTTP — only public alarm pings to the user's
+  own webhook and read-only polls of the user's own relay. Net risk: low.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
