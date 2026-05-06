@@ -7,9 +7,25 @@ class Settings {
   static const _kMorningHour = 'morning_hour';
   static const _kMorningMinute = 'morning_minute';
   static const _kLeadMinutes = 'lead_minutes';
+  static const _kRelayUrl = 'relay_url';
 
   static const defaultWebhook =
       'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
+
+  // Yeshie relay base URL (Dee Stream source). Configurable so Mike can
+  // swap between Tailscale name and LAN IP without a rebuild. Default is
+  // a Tailscale-style placeholder — user MUST set this on first run.
+  static const defaultRelayUrl = 'http://mikes-mac:3333';
+
+  static Future<String> relayUrl() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kRelayUrl) ?? defaultRelayUrl;
+  }
+
+  static Future<void> setRelayUrl(String url) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kRelayUrl, url);
+  }
 
   static Future<String> webhookUrl() async {
     final p = await SharedPreferences.getInstance();

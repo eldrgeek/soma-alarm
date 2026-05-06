@@ -9,6 +9,7 @@ import 'alarms.dart';
 import 'background.dart';
 import 'calendar.dart';
 import 'checklist_page.dart';
+import 'dee_stream/dee_stream_page.dart';
 import 'settings.dart';
 import 'settings_page.dart';
 
@@ -341,6 +342,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             icon: const Icon(Icons.bug_report),
             tooltip: 'Diagnostics',
             onPressed: _showDiagnostics,
+          ),
+          IconButton(
+            icon: const Icon(Icons.forum_outlined),
+            tooltip: 'Dee Stream',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DeeStreamPage()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.checklist_rtl),
