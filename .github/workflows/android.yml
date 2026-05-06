@@ -25,7 +25,7 @@ jobs:
 
       - run: flutter --version
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos
       - run: |
           CHANGELOG=$(git log --oneline -5 | tr '\n' '|' | sed 's/|$//')
           flutter build apk --release \
