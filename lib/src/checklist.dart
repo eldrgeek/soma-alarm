@@ -1,6 +1,8 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import 'checklist_page.dart' show ChecklistApi;
+
 class ChecklistRoutine {
   final int id;
   final String name;
@@ -26,7 +28,7 @@ class ChecklistItem {
   });
 }
 
-class ChecklistRepo {
+class ChecklistRepo implements ChecklistApi {
   static const _kDbVersion = 1;
   static const _kDbName = 'soma_checklist.db';
 
@@ -88,6 +90,7 @@ class ChecklistRepo {
     return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
+  @override
   Future<void> resetIfNewDay() async {
     final db = await _open();
     final today = _today();
@@ -99,6 +102,7 @@ class ChecklistRepo {
     );
   }
 
+  @override
   Future<List<ChecklistRoutine>> routines() async {
     final db = await _open();
     final rows = await db.query('routines', orderBy: 'is_morning DESC, id ASC');
@@ -111,17 +115,20 @@ class ChecklistRepo {
         .toList();
   }
 
+  @override
   Future<int> createRoutine(String name) async {
     final db = await _open();
     return db.insert('routines', {'name': name, 'is_morning': 0});
   }
 
+  @override
   Future<void> deleteRoutine(int routineId) async {
     final db = await _open();
     await db.delete('items', where: 'routine_id = ?', whereArgs: [routineId]);
     await db.delete('routines', where: 'id = ?', whereArgs: [routineId]);
   }
 
+  @override
   Future<List<ChecklistItem>> items(int routineId) async {
     await resetIfNewDay();
     final db = await _open();
@@ -145,6 +152,7 @@ class ChecklistRepo {
         .toList();
   }
 
+  @override
   Future<void> setChecked(int itemId, bool checked) async {
     final db = await _open();
     await db.update(
@@ -159,6 +167,7 @@ class ChecklistRepo {
     );
   }
 
+  @override
   Future<int> addItem(int routineId, String label) async {
     final db = await _open();
     final maxOrder = Sqflite.firstIntValue(await db.rawQuery(
@@ -173,6 +182,7 @@ class ChecklistRepo {
     });
   }
 
+  @override
   Future<void> removeItem(int itemId) async {
     final db = await _open();
     await db.delete('items', where: 'id = ?', whereArgs: [itemId]);

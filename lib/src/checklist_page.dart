@@ -2,15 +2,29 @@ import 'package:flutter/material.dart';
 
 import 'checklist.dart';
 
+/// Surface contract used by [ChecklistPage]. Real app uses [ChecklistRepo];
+/// widget tests inject an in-memory fake.
+abstract class ChecklistApi {
+  Future<void> resetIfNewDay();
+  Future<List<ChecklistRoutine>> routines();
+  Future<List<ChecklistItem>> items(int routineId);
+  Future<int> createRoutine(String name);
+  Future<void> deleteRoutine(int routineId);
+  Future<int> addItem(int routineId, String label);
+  Future<void> removeItem(int itemId);
+  Future<void> setChecked(int itemId, bool checked);
+}
+
 class ChecklistPage extends StatefulWidget {
-  const ChecklistPage({super.key});
+  final ChecklistApi? repo;
+  const ChecklistPage({super.key, this.repo});
 
   @override
   State<ChecklistPage> createState() => _ChecklistPageState();
 }
 
 class _ChecklistPageState extends State<ChecklistPage> {
-  final _repo = ChecklistRepo();
+  late final ChecklistApi _repo = widget.repo ?? ChecklistRepo();
   List<ChecklistRoutine> _routines = [];
   ChecklistRoutine? _selected;
   List<ChecklistItem> _items = [];
@@ -86,6 +100,87 @@ class _ChecklistPageState extends State<ChecklistPage> {
     await _load();
   }
 
+  Future<void> _showRoutineActions(ChecklistRoutine routine) async {
+    final isOnly = _routines.length <= 1;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.label_outline),
+              title: Text(routine.name),
+              subtitle: routine.isMorning
+                  ? const Text('Morning routine (default)')
+                  : null,
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: isOnly
+                    ? Theme.of(ctx).disabledColor
+                    : Theme.of(ctx).colorScheme.error,
+              ),
+              title: Text(
+                'Delete routine',
+                style: TextStyle(
+                  color: isOnly
+                      ? Theme.of(ctx).disabledColor
+                      : Theme.of(ctx).colorScheme.error,
+                ),
+              ),
+              subtitle: isOnly
+                  ? const Text("Can't delete the only routine")
+                  : null,
+              enabled: !isOnly,
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _confirmAndDeleteRoutine(routine);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Cancel'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmAndDeleteRoutine(ChecklistRoutine routine) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete "${routine.name}"?'),
+        content: const Text(
+          'This deletes the routine and all of its items. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _repo.deleteRoutine(routine.id);
+    if (_selected?.id == routine.id) {
+      _selected = null;
+    }
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -111,13 +206,16 @@ class _ChecklistPageState extends State<ChecklistPage> {
                 itemBuilder: (_, i) {
                   final r = _routines[i];
                   final isSel = _selected?.id == r.id;
-                  return ChoiceChip(
-                    label: Text(r.name),
-                    selected: isSel,
-                    onSelected: (_) async {
-                      setState(() => _selected = r);
-                      await _load();
-                    },
+                  return GestureDetector(
+                    onLongPress: () => _showRoutineActions(r),
+                    child: ChoiceChip(
+                      label: Text(r.name),
+                      selected: isSel,
+                      onSelected: (_) async {
+                        setState(() => _selected = r);
+                        await _load();
+                      },
+                    ),
                   );
                 },
                 separatorBuilder: (_, __) => const SizedBox(width: 8),

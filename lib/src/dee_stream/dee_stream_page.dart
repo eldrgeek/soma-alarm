@@ -195,7 +195,7 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
         }
         final idx = _lastError != null ? i - 1 : i;
         final e = _entries[idx];
-        return _DeeCard(
+        return DeeCard(
           entry: e,
           read: _readIds.contains(e.id),
           onMarkRead: () => _markRead(e.id),
@@ -278,22 +278,25 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-class _DeeCard extends StatefulWidget {
+class DeeCard extends StatefulWidget {
   final DeeSaidEntry entry;
   final bool read;
   final VoidCallback onMarkRead;
-  const _DeeCard({
+  final bool initiallyExpanded;
+  const DeeCard({
+    super.key,
     required this.entry,
     required this.read,
     required this.onMarkRead,
+    this.initiallyExpanded = false,
   });
 
   @override
-  State<_DeeCard> createState() => _DeeCardState();
+  State<DeeCard> createState() => _DeeCardState();
 }
 
-class _DeeCardState extends State<_DeeCard> {
-  bool _expanded = false;
+class _DeeCardState extends State<DeeCard> {
+  late bool _expanded = widget.initiallyExpanded;
 
   void _toggle() => setState(() => _expanded = !_expanded);
 
@@ -380,21 +383,34 @@ class _DeeCardState extends State<_DeeCard> {
             ),
           ),
           if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final seg in segmented.segments) _SegmentBlock(seg: seg),
-                  if (hasOpenItems) ...[
-                    const SizedBox(height: 8),
-                    SelectableText('Open items',
-                        style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 4),
-                    for (final item in segmented.openItems)
-                      _OpenItemTile(item: item),
-                  ],
-                ],
+            // Bug D fix: long expanded bodies overflowed past the visible
+            // viewport with no scroll affordance. Cap the body to ~55% of
+            // screen height and put it inside a scrollbar-decorated
+            // SingleChildScrollView so the user has a clear scroll handle.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.55,
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final seg in segmented.segments)
+                        _SegmentBlock(seg: seg),
+                      if (hasOpenItems) ...[
+                        const SizedBox(height: 8),
+                        SelectableText('Open items',
+                            style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 4),
+                        for (final item in segmented.openItems)
+                          _OpenItemTile(item: item),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
         ],

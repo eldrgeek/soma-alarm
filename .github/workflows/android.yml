@@ -2,14 +2,69 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 jobs:
+  test:
+    # Fast host-side tests (unit + widget). No Android emulator. Should
+    # complete in well under a minute and gates the slower jobs below.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - name: Run host tests (unit + widget)
+        run: flutter test --reporter expanded
+
+  integration_test:
+    # Slow on-emulator smoke run. Verifies the integration_test pipeline is
+    # wired up against a real Android image. Bug-specific coverage lives in
+    # the host-side widget tests above; this job catches plugin-channel /
+    # platform-init regressions only.
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run integration smoke on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          script: flutter test integration_test/smoke_test.dart -r expanded
+
   build:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +80,6 @@ jobs:
 
       - run: flutter --version
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
       - run: |
           CHANGELOG=$(git log --oneline -5 | tr '\n' '|' | sed 's/|$//')
           flutter build apk --release \
@@ -35,6 +89,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: soma-alarm-release-apk
+          name: pulse-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

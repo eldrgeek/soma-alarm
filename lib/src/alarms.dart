@@ -21,6 +21,87 @@ const String kActionDismiss = 'dismiss';
 const String kActionFire = 'fire';
 const String kActionMorning = 'morning';
 
+/// Pure decision function for what should happen when a user taps a
+/// notification action button. Extracted from [AlarmService._handleResponse]
+/// so it can be unit-tested without platform plugins.
+///
+/// Returns a [NotificationActionDecision] that the caller then applies via
+/// AlarmService side effects.
+enum NotificationActionKind { reschedule, cancelEvent, cancelKind, ignore }
+
+class NotificationActionDecision {
+  final NotificationActionKind kind;
+  final AlarmRecord? rescheduled;
+  const NotificationActionDecision._(this.kind, {this.rescheduled});
+
+  /// Schedule [rescheduled]. Replaces any same-(eventId, isLead) record.
+  static NotificationActionDecision reschedule(AlarmRecord r) =>
+      NotificationActionDecision._(NotificationActionKind.reschedule,
+          rescheduled: r);
+
+  /// Cancel both lead and start alarms for the event.
+  static const cancelEvent =
+      NotificationActionDecision._(NotificationActionKind.cancelEvent);
+
+  /// Cancel only the matching kind (lead vs start) for the event.
+  static const cancelKind =
+      NotificationActionDecision._(NotificationActionKind.cancelKind);
+
+  /// Unknown actionId — do nothing.
+  static const ignore =
+      NotificationActionDecision._(NotificationActionKind.ignore);
+}
+
+NotificationActionDecision decideNotificationAction({
+  required AlarmRecord rec,
+  required String actionId,
+  required DateTime now,
+}) {
+  if (actionId == kActionSnooze5 ||
+      actionId == kActionSnooze10 ||
+      actionId == kActionSnooze15) {
+    final mins = actionId == kActionSnooze5
+        ? 5
+        : actionId == kActionSnooze10
+            ? 10
+            : 15;
+    final newWhen = now.add(Duration(minutes: mins));
+    final evStart = rec.eventStart;
+
+    // Snooze past event start → swap to a backstop (start-time) alarm if
+    // we're still before event start; otherwise reschedule the same kind.
+    if (evStart != null && !newWhen.isBefore(evStart)) {
+      if (now.isBefore(evStart)) {
+        return NotificationActionDecision.reschedule(AlarmRecord(
+          eventId: rec.eventId,
+          title: rec.title,
+          scheduled: evStart,
+          location: rec.location,
+          isLeadAlarm: false,
+          eventStart: evStart,
+        ));
+      }
+      return NotificationActionDecision.ignore;
+    }
+    return NotificationActionDecision.reschedule(AlarmRecord(
+      eventId: rec.eventId,
+      title: rec.title,
+      scheduled: newWhen,
+      location: rec.location,
+      isLeadAlarm: rec.isLeadAlarm,
+      eventStart: evStart,
+    ));
+  }
+
+  if (actionId == kActionDismiss) {
+    return rec.isLeadAlarm
+        ? NotificationActionDecision.cancelEvent
+        : NotificationActionDecision.cancelKind;
+  }
+
+  return NotificationActionDecision.ignore;
+}
+
 class AlarmRecord {
   final String eventId;
   final String title;
@@ -412,47 +493,23 @@ class AlarmService {
 
     await svc.markFired(rec);
 
-    if (actionId == kActionSnooze5 ||
-        actionId == kActionSnooze10 ||
-        actionId == kActionSnooze15) {
-      final mins = actionId == kActionSnooze5
-          ? 5
-          : actionId == kActionSnooze10
-              ? 10
-              : 15;
-      final now = DateTime.now();
-      var newWhen = now.add(Duration(minutes: mins));
-      final evStart = rec.eventStart;
-
-      if (evStart != null && !newWhen.isBefore(evStart)) {
-        if (now.isBefore(evStart)) {
-          await svc.scheduleEventAlarm(AlarmRecord(
-            eventId: rec.eventId,
-            title: rec.title,
-            scheduled: evStart,
-            location: rec.location,
-            isLeadAlarm: false,
-            eventStart: evStart,
-          ));
-        }
-        return;
-      }
-
-      final snoozed = AlarmRecord(
-        eventId: rec.eventId,
-        title: rec.title,
-        scheduled: newWhen,
-        location: rec.location,
-        isLeadAlarm: rec.isLeadAlarm,
-        eventStart: evStart,
-      );
-      await svc.scheduleEventAlarm(snoozed);
-    } else if (actionId == kActionDismiss) {
-      if (rec.isLeadAlarm) {
+    final decision = decideNotificationAction(
+      rec: rec,
+      actionId: actionId,
+      now: DateTime.now(),
+    );
+    switch (decision.kind) {
+      case NotificationActionKind.reschedule:
+        await svc.scheduleEventAlarm(decision.rescheduled!);
+        break;
+      case NotificationActionKind.cancelEvent:
         await svc.cancelForEvent(rec.eventId);
-      } else {
-        await svc.cancelAlarm(rec.eventId, lead: false);
-      }
+        break;
+      case NotificationActionKind.cancelKind:
+        await svc.cancelAlarm(rec.eventId, lead: rec.isLeadAlarm);
+        break;
+      case NotificationActionKind.ignore:
+        break;
     }
   }
 }
