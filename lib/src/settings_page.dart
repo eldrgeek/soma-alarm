@@ -122,7 +122,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+      body: SelectionArea(
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text('Webhook', style: Theme.of(context).textTheme.titleMedium),
@@ -198,6 +199,7 @@ class _SettingsPageState extends State<SettingsPage> {
             label: const Text('Save'),
           ),
         ],
+      ),
       ),
     );
   }

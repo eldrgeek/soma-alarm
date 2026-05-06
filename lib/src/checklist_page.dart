@@ -99,7 +99,8 @@ class _ChecklistPageState extends State<ChecklistPage> {
           ),
         ],
       ),
-      body: Column(
+      body: SelectionArea(
+        child: Column(
         children: [
           if (_routines.isNotEmpty)
             SizedBox(
@@ -150,6 +151,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
                   ),
           ),
         ],
+      ),
       ),
       floatingActionButton: _selected == null
           ? null

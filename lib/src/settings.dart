@@ -14,8 +14,10 @@ class Settings {
 
   // Yeshie relay base URL (Dee Stream source). Configurable so Mike can
   // swap between Tailscale name and LAN IP without a rebuild. Default is
-  // a Tailscale-style placeholder — user MUST set this on first run.
-  static const defaultRelayUrl = 'http://mikes-mac:3333';
+  // empty — the resolver tries kDefaultRelayCandidates instead, which
+  // includes the Mac's known-good LAN IP. Setting an explicit value here
+  // makes it the FIRST thing tried on each probe.
+  static const defaultRelayUrl = '';
 
   static Future<String> relayUrl() async {
     final p = await SharedPreferences.getInstance();

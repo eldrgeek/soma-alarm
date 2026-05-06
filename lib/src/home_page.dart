@@ -213,7 +213,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (ctx) => AlertDialog(
         title: const Text('Diagnostics'),
         content: SingleChildScrollView(
-          child: Column(
+          child: SelectionArea(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -269,6 +270,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ))),
               ],
             ],
+          ),
           ),
         ),
         actions: [
@@ -370,7 +372,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: SelectionArea(
+        child: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -442,6 +445,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 )),
           ],
         ),
+      ),
       ),
     );
   }

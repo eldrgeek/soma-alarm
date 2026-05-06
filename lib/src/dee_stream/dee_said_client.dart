@@ -4,12 +4,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'dee_said_models.dart';
+import 'relay_resolver.dart';
 
 class DeeSaidClient {
-  final String baseUrl;
+  final RelayResolver resolver;
   final http.Client _http;
 
-  DeeSaidClient(this.baseUrl, {http.Client? client})
+  DeeSaidClient({required this.resolver, http.Client? client})
       : _http = client ?? http.Client();
 
   /// PRIMARY MECHANISM: HTTP polling against /jobs/status.
@@ -17,11 +18,14 @@ class DeeSaidClient {
   /// port but the Flutter socket_io_client dep wasn't worth the bring-up
   /// cost for a 10s poll. Note marker for Phase 1b.
   Future<List<DeeSaidEntry>> fetchEntries({Duration? timeout}) async {
-    final uri = Uri.parse('${_normalizeBase(baseUrl)}/jobs/status');
+    final base = await resolver.resolve();
+    final uri = Uri.parse('$base/jobs/status');
     final res = await _http
         .get(uri)
         .timeout(timeout ?? const Duration(seconds: 8));
     if (res.statusCode != 200) {
+      // If the cached URL went bad, drop it and let next fetch re-probe.
+      resolver.reset();
       throw HttpException(
           'relay /jobs/status returned ${res.statusCode}: ${res.body}');
     }
@@ -42,17 +46,6 @@ class DeeSaidClient {
   }
 
   void close() => _http.close();
-
-  static String _normalizeBase(String url) {
-    var u = url.trim();
-    while (u.endsWith('/')) {
-      u = u.substring(0, u.length - 1);
-    }
-    if (!u.startsWith('http')) {
-      u = 'http://$u';
-    }
-    return u;
-  }
 }
 
 class HttpException implements Exception {

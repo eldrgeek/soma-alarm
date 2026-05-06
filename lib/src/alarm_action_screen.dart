@@ -124,7 +124,8 @@ class _AlarmActionScreenState extends State<AlarmActionScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Alarm')),
-      body: Padding(
+      body: SelectionArea(
+        child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -222,6 +223,7 @@ class _AlarmActionScreenState extends State<AlarmActionScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
       ),
     );
   }
