@@ -187,22 +187,25 @@ class _ReactionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Mira-principle: 44pt minimum touch target. Make the tap-zone big enough
+    // that Mike doesn't fumble; a single accidental tap is reversible (the
+    // same tap toggles the reaction off — see toggle() in ReactionsRepo).
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: Tooltip(
         message: tooltip,
         child: InkResponse(
           onTap: onTap,
-          radius: 22,
+          radius: 28,
           child: Container(
-            width: 36,
-            height: 30,
+            width: 44,
+            height: 44,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: active
                   ? theme.colorScheme.primaryContainer
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: active
                     ? theme.colorScheme.primary
@@ -210,7 +213,7 @@ class _ReactionChip extends StatelessWidget {
                 width: active ? 1.4 : 1.0,
               ),
             ),
-            child: Text(glyph, style: const TextStyle(fontSize: 16)),
+            child: Text(glyph, style: const TextStyle(fontSize: 18)),
           ),
         ),
       ),

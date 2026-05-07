@@ -516,11 +516,18 @@ class _SegmentBlockState extends State<_SegmentBlock> {
   Future<void> _onFourButton(String choice) async {
     final repo = widget.reactions;
     if (repo == null) return;
-    // Store the choice as the note so a single text field captures it; also
-    // set a token so the chip stays selected on rebuild.
-    final next = SegmentReaction(tokens: {'reply:$choice'}, note: null);
+    // Mira-principle: tap-and-untap is cost-free. Tapping the currently-
+    // selected choice clears the bar; tapping a different choice replaces it.
+    // No confirmation dialog — the cost of noise in the data is much lower
+    // than the cost of friction in tapping.
+    final cur = await repo.get(_segId);
+    final isOn = cur.tokens.contains('reply:$choice');
+    final next = isOn
+        ? const SegmentReaction()
+        : SegmentReaction(tokens: {'reply:$choice'});
     await repo.set(_segId, next);
     if (mounted) setState(() => _reaction = next);
+    if (isOn) return;
     final c = widget.client;
     if (c != null) {
       unawaited(c.postReaction(
