@@ -15,12 +15,11 @@ Future<void> captureScreenshot(
   required String name,
 }) async {
   await tester.pumpAndSettle(const Duration(milliseconds: 200));
-  if (binding is LiveTestWidgetsFlutterBinding) {
-    // Real-device run: convertFlutterSurfaceToImage is required on Android.
-    try {
-      await binding.convertFlutterSurfaceToImage();
-    } catch (_) {/* harmless if already converted */}
-  }
+  // Real-device run: convertFlutterSurfaceToImage is required on Android.
+  // Always try; the catch handles host-test runs and already-converted states.
+  try {
+    await binding.convertFlutterSurfaceToImage();
+  } catch (_) {/* harmless if not on real device or already converted */}
   final bytes = await binding.takeScreenshot('$bug/$name');
   // When running on-host (`flutter test`) we can persist to disk directly.
   // When running on-device, takeScreenshot ships bytes back over the channel
