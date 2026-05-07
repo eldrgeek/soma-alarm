@@ -116,7 +116,9 @@ class RelayResolverException implements Exception {
 /// Default candidate list. Ordered most-likely-to-work first.
 /// User-set URL from settings is tried before any of these.
 const List<String> kDefaultRelayCandidates = [
-  'http://192.168.4.36:3333',     // Mac LAN IP (Phase 1a known-good)
-  'http://mikes-mac.local:3333',  // mDNS (works if avahi/bonjour resolves)
-  'http://mikes-mac:3333',        // Tailscale name (works once installed)
+  'http://192.168.4.36:3333',     // Mac LAN IP (works on home wifi)
+  'http://100.72.65.118:3333',    // Mac Tailscale IP (works anywhere Tailscale is up)
+  'http://macbook-pro:3333',      // Tailscale MagicDNS short name
+  'http://mikes-mac.local:3333',  // mDNS — Android typically can't resolve this
+  'http://mikes-mac:3333',        // legacy Tailscale name
 ];

@@ -15,6 +15,12 @@ import 'relay_resolver.dart';
 class DeeStreamPage extends StatefulWidget {
   const DeeStreamPage({super.key});
 
+  /// Most recently constructed client. Null until Dee Stream is opened
+  /// once. AboutPage reads this to show live poll/success/count metrics
+  /// without re-implementing polling.
+  static DeeSaidClient? lastClient;
+  static String? lastResolvedUrl;
+
   @override
   State<DeeStreamPage> createState() => _DeeStreamPageState();
 }
@@ -55,10 +61,12 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
       userUrl: url,
       candidates: kDefaultRelayCandidates,
     );
+    final client = DeeSaidClient(resolver: resolver);
+    DeeStreamPage.lastClient = client;
     setState(() {
       _userUrl = url;
       _resolver = resolver;
-      _client = DeeSaidClient(resolver: resolver);
+      _client = client;
     });
     await _refresh();
     _timer = Timer.periodic(_pollInterval, (_) => _refresh());
@@ -106,10 +114,12 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
       userUrl: result,
       candidates: kDefaultRelayCandidates,
     );
+    final client = DeeSaidClient(resolver: resolver);
+    DeeStreamPage.lastClient = client;
     setState(() {
       _userUrl = result;
       _resolver = resolver;
-      _client = DeeSaidClient(resolver: resolver);
+      _client = client;
       _loading = true;
       _entries = [];
       _lastError = null;

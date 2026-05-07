@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'about_page.dart';
 import 'alarms.dart';
 import 'background.dart';
 import 'calendar.dart';
@@ -340,6 +341,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         title: const Text('Pulse'),
         backgroundColor: isDev ? Colors.deepOrange : null,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'About / Status',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutPage()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.bug_report),
             tooltip: 'Diagnostics',
