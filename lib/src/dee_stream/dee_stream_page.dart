@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../settings.dart';
+import 'dee_reactions.dart';
 import 'dee_said_client.dart';
 import 'dee_said_models.dart';
 import 'dee_said_segmenter.dart';
+import 'dee_segment_bar.dart';
 import 'relay_resolver.dart';
 
 class DeeStreamPage extends StatefulWidget {
@@ -29,6 +31,7 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
   String? _lastError;
   Map<String, String> _attemptErrors = const {};
   bool _loading = true;
+  final ReactionsRepo _reactions = ReactionsRepo();
 
   @override
   void initState() {
@@ -41,6 +44,7 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
     _timer?.cancel();
     _client?.close();
     _resolver?.close();
+    _reactions.dispose();
     super.dispose();
   }
 
@@ -199,6 +203,8 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
           entry: e,
           read: _readIds.contains(e.id),
           onMarkRead: () => _markRead(e.id),
+          reactions: _reactions,
+          client: _client,
         );
       },
     );
@@ -283,12 +289,16 @@ class DeeCard extends StatefulWidget {
   final bool read;
   final VoidCallback onMarkRead;
   final bool initiallyExpanded;
+  final ReactionsRepo? reactions;
+  final DeeSaidClient? client;
   const DeeCard({
     super.key,
     required this.entry,
     required this.read,
     required this.onMarkRead,
     this.initiallyExpanded = false,
+    this.reactions,
+    this.client,
   });
 
   @override
@@ -399,7 +409,12 @@ class _DeeCardState extends State<DeeCard> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final seg in segmented.segments)
-                        _SegmentBlock(seg: seg),
+                        _SegmentBlock(
+                          seg: seg,
+                          entryId: widget.entry.id,
+                          reactions: widget.reactions,
+                          client: widget.client,
+                        ),
                       if (hasOpenItems) ...[
                         const SizedBox(height: 8),
                         SelectableText('Open items',
@@ -419,14 +434,117 @@ class _DeeCardState extends State<DeeCard> {
   }
 }
 
-class _SegmentBlock extends StatelessWidget {
+class _SegmentBlock extends StatefulWidget {
   final MessageSegment seg;
-  const _SegmentBlock({required this.seg});
+  final String entryId;
+  final ReactionsRepo? reactions;
+  final DeeSaidClient? client;
+  const _SegmentBlock({
+    required this.seg,
+    required this.entryId,
+    this.reactions,
+    this.client,
+  });
+
+  @override
+  State<_SegmentBlock> createState() => _SegmentBlockState();
+}
+
+class _SegmentBlockState extends State<_SegmentBlock> {
+  SegmentReaction _reaction = const SegmentReaction();
+  StreamSubscription<void>? _sub;
+
+  String get _segId => widget.seg.idFor(widget.entryId);
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _sub = widget.reactions?.changes.listen((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final repo = widget.reactions;
+    if (repo == null) return;
+    final r = await repo.get(_segId);
+    if (!mounted) return;
+    setState(() => _reaction = r);
+  }
+
+  Future<void> _onTap(String token) async {
+    final repo = widget.reactions;
+    if (repo == null) return;
+    final next = await repo.toggle(_segId, token);
+    if (mounted) setState(() => _reaction = next);
+    // Only POST to relay if the token is now present (a "set", not an unset)
+    // and it isn't the thread token (thread sends its body via _onSubmitThread).
+    if (token != Reaction.thread && next.tokens.contains(token)) {
+      _firePostReaction(token);
+    }
+  }
+
+  Future<void> _onSubmitThread(String note) async {
+    final repo = widget.reactions;
+    if (repo == null) return;
+    await repo.setNote(_segId, note);
+    if (mounted) {
+      setState(() => _reaction = _reaction.withNote(note));
+    }
+    _firePostReaction(Reaction.thread, note: note);
+  }
+
+  void _firePostReaction(String token, {String? note}) {
+    final c = widget.client;
+    if (c == null) return;
+    // Fire-and-forget: local persistence is the source of truth; relay is
+    // a best-effort signal back to Dee. Swallow errors silently.
+    unawaited(c.postReaction(
+      segmentId: _segId,
+      deeMessageId: widget.entryId,
+      reaction: token,
+      note: note,
+      segmentText: widget.seg.text,
+    ).catchError((_) {}));
+  }
+
+  Future<void> _onFourButton(String choice) async {
+    final repo = widget.reactions;
+    if (repo == null) return;
+    // Store the choice as the note so a single text field captures it; also
+    // set a token so the chip stays selected on rebuild.
+    final next = SegmentReaction(tokens: {'reply:$choice'}, note: null);
+    await repo.set(_segId, next);
+    if (mounted) setState(() => _reaction = next);
+    final c = widget.client;
+    if (c != null) {
+      unawaited(c.postReaction(
+        segmentId: _segId,
+        deeMessageId: widget.entryId,
+        reaction: 'reply:$choice',
+        segmentText: widget.seg.text,
+      ).catchError((_) {}));
+    }
+  }
+
+  String? get _selectedFourButton {
+    for (final t in _reaction.tokens) {
+      if (t.startsWith('reply:')) return t.substring('reply:'.length);
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isFourButton = isFourButtonSegment(widget.seg.text);
     return Container(
+      key: Key('segment-block-${widget.seg.index}'),
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -436,12 +554,23 @@ class _SegmentBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (seg.heading != null && seg.heading!.isNotEmpty) ...[
-            SelectableText(seg.heading!,
+          if (widget.seg.heading != null && widget.seg.heading!.isNotEmpty) ...[
+            SelectableText(widget.seg.heading!,
                 style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
           ],
-          SelectableText(seg.text, style: theme.textTheme.bodyMedium),
+          SelectableText(widget.seg.text, style: theme.textTheme.bodyMedium),
+          if (widget.reactions != null)
+            isFourButton
+                ? FourButtonReplyBar(
+                    selected: _selectedFourButton,
+                    onChoose: _onFourButton,
+                  )
+                : SegmentResponseBar(
+                    current: _reaction,
+                    onTap: _onTap,
+                    onSubmitThread: _onSubmitThread,
+                  ),
         ],
       ),
     );

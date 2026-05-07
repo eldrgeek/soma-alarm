@@ -45,6 +45,41 @@ class DeeSaidClient {
     return entries;
   }
 
+  /// Best-effort POST of a per-segment reaction to the relay's
+  /// /dispatch_input endpoint. Local persistence is the source of truth;
+  /// failure here is logged via thrown exception but the caller should
+  /// swallow it — Mike's tag must always succeed locally.
+  Future<void> postReaction({
+    required String segmentId,
+    required String deeMessageId,
+    required String reaction,
+    String? note,
+    String? segmentText,
+    Duration? timeout,
+  }) async {
+    final base = await resolver.resolve();
+    final uri = Uri.parse('$base/dispatch_input');
+    final res = await _http
+        .post(
+          uri,
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'segment_id': segmentId,
+            'dee_message_id': deeMessageId,
+            'reaction': reaction,
+            'source': 'pulse-segment-bar',
+            if (note != null && note.isNotEmpty) 'note': note,
+            if (segmentText != null && segmentText.isNotEmpty)
+              'segment_text': segmentText,
+          }),
+        )
+        .timeout(timeout ?? const Duration(seconds: 6));
+    if (res.statusCode >= 400) {
+      throw HttpException(
+          'relay /dispatch_input returned ${res.statusCode}: ${res.body}');
+    }
+  }
+
   void close() => _http.close();
 }
 
