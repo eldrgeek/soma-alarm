@@ -8,6 +8,7 @@ class Settings {
   static const _kMorningMinute = 'morning_minute';
   static const _kLeadMinutes = 'lead_minutes';
   static const _kRelayUrl = 'relay_url';
+  static const _kDispatchToken = 'dispatch_token';
 
   static const defaultWebhook =
       'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
@@ -27,6 +28,19 @@ class Settings {
   static Future<void> setRelayUrl(String url) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_kRelayUrl, url);
+  }
+
+  /// Shared-secret token for POST /dispatch_input. Mirrors the contents of
+  /// ~/.dispatch/relay.secret on the relay host. Empty until Mike pastes it
+  /// into Settings → Dispatch Token.
+  static Future<String> dispatchToken() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kDispatchToken) ?? '';
+  }
+
+  static Future<void> setDispatchToken(String token) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kDispatchToken, token.trim());
   }
 
   static Future<String> webhookUrl() async {

@@ -8,7 +8,9 @@ import '../settings.dart';
 import 'dee_said_client.dart';
 import 'dee_said_models.dart';
 import 'dee_said_segmenter.dart';
+import 'dispatch_input_client.dart';
 import 'relay_resolver.dart';
+import 'reply_composer.dart';
 
 class DeeStreamPage extends StatefulWidget {
   const DeeStreamPage({super.key});
@@ -21,10 +23,13 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
   static const Duration _pollInterval = Duration(seconds: 10);
 
   DeeSaidClient? _client;
+  DispatchInputClient? _dispatchClient;
   RelayResolver? _resolver;
   String? _userUrl;
+  String _dispatchToken = '';
   Timer? _timer;
   List<DeeSaidEntry> _entries = [];
+  final List<YouSaidEntry> _youSaidEntries = <YouSaidEntry>[];
   final Set<String> _readIds = <String>{};
   String? _lastError;
   Map<String, String> _attemptErrors = const {};
@@ -40,12 +45,14 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
   void dispose() {
     _timer?.cancel();
     _client?.close();
+    _dispatchClient?.close();
     _resolver?.close();
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
     final url = await Settings.relayUrl();
+    final token = await Settings.dispatchToken();
     if (!mounted) return;
     final resolver = RelayResolver(
       userUrl: url,
@@ -53,8 +60,13 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
     );
     setState(() {
       _userUrl = url;
+      _dispatchToken = token;
       _resolver = resolver;
       _client = DeeSaidClient(resolver: resolver);
+      _dispatchClient = DispatchInputClient(
+        resolver: resolver,
+        tokenGetter: () => _dispatchToken,
+      );
     });
     await _refresh();
     _timer = Timer.periodic(_pollInterval, (_) => _refresh());
@@ -83,6 +95,62 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
 
   void _markRead(String id) {
     setState(() => _readIds.add(id));
+  }
+
+  Future<void> _openReplyComposer() async {
+    if (_dispatchClient == null) return;
+    if (_dispatchToken.isEmpty) {
+      await _editDispatchToken();
+      if (_dispatchToken.isEmpty) return; // user cancelled
+    }
+    final entry = await showReplyComposer(context, client: _dispatchClient!);
+    if (entry == null || !mounted) return;
+    setState(() => _youSaidEntries.add(entry));
+  }
+
+  Future<void> _editDispatchToken() async {
+    final controller = TextEditingController(text: _dispatchToken);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dispatch Token'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SelectableText(
+              'Shared secret from ~/.dispatch/relay.secret on the relay host. '
+              'Required to POST replies to Dee.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: false,
+              decoration: const InputDecoration(
+                hintText: 'Paste token',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    await Settings.setDispatchToken(result);
+    if (!mounted) return;
+    setState(() => _dispatchToken = result.trim());
   }
 
   Future<void> _editRelayUrl() async {
@@ -125,6 +193,11 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
         title: const Text('Dee Stream'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.key_outlined),
+            tooltip: 'Dispatch token',
+            onPressed: _editDispatchToken,
+          ),
+          IconButton(
             icon: const Icon(Icons.cloud_outlined),
             tooltip: 'Relay URL',
             onPressed: _editRelayUrl,
@@ -141,14 +214,34 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
           child: _buildBody(),
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const Key('reply_to_dee_fab'),
+        onPressed: _dispatchClient == null ? null : _openReplyComposer,
+        icon: const Icon(Icons.reply),
+        label: const Text('Reply to Dee'),
+      ),
     );
   }
 
+  /// Merge Dee + You entries, newest first.
+  List<Object> _mergedItems() {
+    final items = <Object>[]
+      ..addAll(_entries)
+      ..addAll(_youSaidEntries);
+    items.sort((a, b) {
+      final ta = a is DeeSaidEntry ? a.createdAt : (a as YouSaidEntry).sentAt;
+      final tb = b is DeeSaidEntry ? b.createdAt : (b as YouSaidEntry).sentAt;
+      return tb.compareTo(ta);
+    });
+    return items;
+  }
+
   Widget _buildBody() {
-    if (_loading && _entries.isEmpty) {
+    final merged = _mergedItems();
+    if (_loading && merged.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_entries.isEmpty) {
+    if (merged.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -171,7 +264,8 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
                     const SizedBox(height: 8),
                     SelectableText(
                       'Polling $_activeUrl every 10s.\n'
-                      'Pull-to-refresh to retry now.',
+                      'Pull-to-refresh to retry now.\n'
+                      'Tap "Reply to Dee" to send a message.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -182,8 +276,8 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
       );
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _entries.length + (_lastError != null ? 1 : 0),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      itemCount: merged.length + (_lastError != null ? 1 : 0) + 1, // +1 trailing pad for FAB
       itemBuilder: (ctx, i) {
         if (_lastError != null && i == 0) {
           return _ErrorCard(
@@ -194,13 +288,88 @@ class _DeeStreamPageState extends State<DeeStreamPage> {
           );
         }
         final idx = _lastError != null ? i - 1 : i;
-        final e = _entries[idx];
+        if (idx >= merged.length) {
+          return const SizedBox(height: 80);
+        }
+        final item = merged[idx];
+        if (item is YouSaidEntry) {
+          return YouSaidCard(entry: item);
+        }
+        final e = item as DeeSaidEntry;
         return DeeCard(
           entry: e,
           read: _readIds.contains(e.id),
           onMarkRead: () => _markRead(e.id),
         );
       },
+    );
+  }
+}
+
+/// Card rendering a message Mike sent via the Reply composer. Visually
+/// mirrors DeeCard but right-aligned with a "you said" label so the stream
+/// reads as a back-and-forth.
+class YouSaidCard extends StatelessWidget {
+  final YouSaidEntry entry;
+  const YouSaidCard({super.key, required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fmt = DateFormat('h:mm:ss a');
+    final ts = fmt.format(entry.sentAt);
+    final isFailed = entry.status == 'failed';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 6, 12, 6),
+      child: Card(
+        key: const Key('you_said_card'),
+        color: isFailed
+            ? theme.colorScheme.errorContainer
+            : theme.colorScheme.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(
+                    isFailed ? Icons.error_outline : Icons.check_circle_outline,
+                    size: 14,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isFailed ? 'failed · $ts' : 'you said · $ts',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                entry.body,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+                textAlign: TextAlign.end,
+              ),
+              if (entry.error != null) ...[
+                const SizedBox(height: 4),
+                SelectableText(
+                  entry.error!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
