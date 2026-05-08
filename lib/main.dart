@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:workmanager/workmanager.dart';
@@ -20,17 +21,22 @@ Future<void> main() async {
   final themeProvider = ThemeProvider();
   await themeProvider.load();
 
-  await AlarmService.instance.init();
-  AlarmService.instance.onNotificationTap = navigateToAlarmAction;
-  final launchRec = await AlarmService.instance.getLaunchAlarmRecord();
+  if (!kIsWeb) {
+    await AlarmService.instance.init();
+    AlarmService.instance.onNotificationTap = navigateToAlarmAction;
+  }
+  final launchRec =
+      kIsWeb ? null : await AlarmService.instance.getLaunchAlarmRecord();
 
-  await Workmanager().initialize(callbackDispatcher);
-  await Workmanager().registerPeriodicTask(
-    'soma-calendar-poll',
-    'calendarPoll',
-    frequency: const Duration(minutes: 15),
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-  );
+  if (!kIsWeb) {
+    await Workmanager().initialize(callbackDispatcher);
+    await Workmanager().registerPeriodicTask(
+      'soma-calendar-poll',
+      'calendarPoll',
+      frequency: const Duration(minutes: 15),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    );
+  }
 
   runApp(
     ChangeNotifierProvider.value(

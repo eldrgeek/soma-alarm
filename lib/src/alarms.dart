@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -94,6 +95,7 @@ class AlarmService {
 
   Future<void> init() async {
     if (_initialized) return;
+    if (kIsWeb) return;
     tzdata.initializeTimeZones();
     final localName = await FlutterTimezone.getLocalTimezone();
     tz.setLocalLocation(tz.getLocation(localName));
@@ -337,6 +339,7 @@ class AlarmService {
   }
 
   Future<AlarmRecord?> getLaunchAlarmRecord() async {
+    if (kIsWeb) return null;
     final details = await _plugin.getNotificationAppLaunchDetails();
     if (details == null || !details.didNotificationLaunchApp) return null;
     final resp = details.notificationResponse;
