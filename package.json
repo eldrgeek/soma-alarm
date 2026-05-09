@@ -1,0 +1,29 @@
+{
+  "name": "sidekick-android",
+  "version": "1.0.0",
+  "description": "Android (Flutter) calendar alarm + morning routine app for the SOMA stack.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eldrgeek/soma-alarm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/eldrgeek/soma-alarm/issues"
+  },
+  "homepage": "https://github.com/eldrgeek/soma-alarm#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

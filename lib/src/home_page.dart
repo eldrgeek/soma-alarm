@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -54,6 +55,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _refresh() async {
+    if (kIsWeb) {
+      setState(() => _loading = false);
+      return;
+    }
     setState(() {
       _loading = true;
       _lastError = null;
@@ -171,6 +176,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _showDiagnostics() async {
+    if (kIsWeb) return; // diagnostics not available on web
     final calPerm = await Permission.calendarFullAccess.status;
     final notifPerm = await Permission.notification.status;
     final exactAlarmPerm = await Permission.scheduleExactAlarm.status;

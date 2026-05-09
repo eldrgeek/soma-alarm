@@ -26,6 +26,7 @@ class CalendarReader {
   static const _channel = MethodChannel('org.esr.sidekick/calendar');
 
   Future<bool> ensurePermissions() async {
+    if (kIsWeb) return true; // permission_handler not implemented on web
     var status = await Permission.calendarFullAccess.status;
     debugPrint('SOMA-CAL: permission=$status');
     if (!status.isGranted) {
