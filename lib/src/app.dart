@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,6 +6,7 @@ import '../theme/theme_provider.dart';
 import 'alarm_action_screen.dart';
 import 'alarms.dart';
 import 'home_page.dart';
+import 'web_shell.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -26,7 +28,7 @@ class SomaAlarmApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         darkTheme: themeProvider.themeData,
-        home: const HomePage(),
+        home: kIsWeb ? const WebShell() : const HomePage(),
       ),
     );
   }
