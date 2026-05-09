@@ -282,3 +282,81 @@ test('I: Running job detail pane uses log tail endpoint', async ({ page }) => {
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(`Log-tail screenshot: ${screenshotPath}`);
 });
+
+// Test J: Activity Feed endpoint returns items with required fields
+test('J: /artifacts/activity returns items with path, kind, mtime', async ({ page }) => {
+  const actResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/artifacts/activity?limit=10');
+    return r.json();
+  });
+
+  const items = (actResp as any).items as any[];
+  expect(Array.isArray(items), 'activity items should be an array').toBe(true);
+  expect(items.length, 'Expected at least one activity item').toBeGreaterThan(0);
+
+  const first = items[0];
+  expect(first.path, 'Expected path field').toBeDefined();
+  expect(first.kind, 'Expected kind field').toBeDefined();
+  expect(first.mtime, 'Expected mtime field').toBeDefined();
+  expect(first.name, 'Expected name field').toBeDefined();
+  expect(
+    ['audit', 'log', 'report', 'spec', 'wall'].includes(first.kind),
+    `Expected valid kind, got: ${first.kind}`
+  ).toBe(true);
+
+  // Items should be newest-first (mtime descending)
+  if (items.length > 1) {
+    const t0 = new Date(items[0].mtime).getTime();
+    const t1 = new Date(items[1].mtime).getTime();
+    expect(t0, 'Expected newest item first').toBeGreaterThanOrEqual(t1);
+  }
+
+  const screenshotsDir = path.join(process.env.HOME || '', 'Projects/SOMA/audits/screenshots');
+  if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  await page.goto('http://localhost:8088');
+  await page.waitForTimeout(3000);
+  const screenshotPath = path.join(screenshotsDir, `pulse-hud-r4-activity-${ts}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(`Activity screenshot: ${screenshotPath}`);
+});
+
+// Test K: Putoff queue file is accessible via /artifacts/file whitelist
+test('K: /artifacts/file serves putoff-queue.json', async ({ page }) => {
+  const resp = await page.evaluate(async () => {
+    const r = await fetch(
+      `http://localhost:3333/artifacts/file?path=${encodeURIComponent('~/Projects/SOMA/state/putoff-queue.json')}`
+    );
+    return { status: r.status, text: await r.text() };
+  });
+
+  expect(resp.status, 'Expected 200 for putoff-queue.json').toBe(200);
+  const data = JSON.parse(resp.text);
+  expect(data.items, 'Expected items array in putoff-queue.json').toBeDefined();
+  expect(Array.isArray(data.items), 'items should be an array').toBe(true);
+});
+
+// Test L: Quick-capture endpoint accepts POST and returns ok
+test('L: /pulse/capture accepts capture and returns ok', async ({ page }) => {
+  const resp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/pulse/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'playwright-test-capture-round4' }),
+    });
+    return { status: r.status, body: await r.json() };
+  });
+
+  expect(resp.status, 'Expected 200 from /pulse/capture').toBe(200);
+  expect((resp.body as any).ok, 'Expected ok:true').toBe(true);
+  expect((resp.body as any).timestamp, 'Expected timestamp').toBeDefined();
+
+  const screenshotsDir = path.join(process.env.HOME || '', 'Projects/SOMA/audits/screenshots');
+  if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  await page.goto('http://localhost:8088');
+  await page.waitForTimeout(3000);
+  const screenshotPath = path.join(screenshotsDir, `pulse-hud-r4-quickcapture-${ts}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(`Quick-capture screenshot: ${screenshotPath}`);
+});
