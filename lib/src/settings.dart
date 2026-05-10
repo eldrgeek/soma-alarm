@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Settings {
@@ -7,9 +8,26 @@ class Settings {
   static const _kMorningHour = 'morning_hour';
   static const _kMorningMinute = 'morning_minute';
   static const _kLeadMinutes = 'lead_minutes';
+  static const _kYeshieHost = 'yeshie_host';
 
   static const defaultWebhook =
       'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
+
+  // Web runs on the Mac itself → localhost. Mobile uses Tailscale to reach Mac.
+  static const _defaultYeshieHostWeb = 'http://localhost:3333';
+  static const _defaultYeshieHostMobile = 'http://100.72.65.118:3333';
+  static String get defaultYeshieHost =>
+      kIsWeb ? _defaultYeshieHostWeb : _defaultYeshieHostMobile;
+
+  static Future<String> yeshieHost() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kYeshieHost) ?? defaultYeshieHost;
+  }
+
+  static Future<void> setYeshieHost(String host) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kYeshieHost, host);
+  }
 
   static Future<String> webhookUrl() async {
     final p = await SharedPreferences.getInstance();

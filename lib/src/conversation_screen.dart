@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
+
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({super.key});
 
@@ -14,7 +16,7 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen>
     with WidgetsBindingObserver {
-  static const _base = 'http://localhost:3333';
+  String _base = Settings.defaultYeshieHost;
 
   final _scrollController = ScrollController();
   final _inputController = TextEditingController();
@@ -30,8 +32,15 @@ class _ConversationScreenState extends State<ConversationScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _startPolling(active: true);
-    _fetchMessages();
+    _loadHost().then((_) {
+      _startPolling(active: true);
+      _fetchMessages();
+    });
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _base = host);
   }
 
   @override

@@ -17,6 +17,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _webhookCtrl = TextEditingController();
+  final _yeshieHostCtrl = TextEditingController();
   bool _webhookEnabled = true;
   bool _morningEnabled = true;
   TimeOfDayLite _morning = const TimeOfDayLite(7, 0);
@@ -34,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final mEn = await Settings.morningEnabled();
     final mt = await Settings.morningTime();
     final lead = await Settings.leadMinutes();
+    final yeshie = await Settings.yeshieHost();
     if (!mounted) return;
     setState(() {
       _webhookCtrl.text = url;
@@ -41,6 +43,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _morningEnabled = mEn;
       _morning = mt;
       _lead = lead;
+      _yeshieHostCtrl.text = yeshie;
     });
   }
 
@@ -63,12 +66,23 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    final yeshie = _yeshieHostCtrl.text.trim();
+    if (yeshie.isNotEmpty) {
+      final parsed = Uri.tryParse(yeshie);
+      if (parsed == null || !parsed.hasScheme || parsed.host.isEmpty) {
+        _snack('Yeshie host must be a valid URL (e.g. http://100.x.y.z:3333)',
+            isError: true);
+        return;
+      }
+    }
+
     try {
       await Settings.setWebhookUrl(url);
       await Settings.setWebhookEnabled(_webhookEnabled);
       await Settings.setMorningEnabled(_morningEnabled);
       await Settings.setMorningTime(_morning.hour, _morning.minute);
       await Settings.setLeadMinutes(_lead);
+      if (yeshie.isNotEmpty) await Settings.setYeshieHost(yeshie);
       await runBackgroundPoll();
       if (_morningEnabled) {
         await AlarmService.instance
@@ -125,6 +139,28 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text('Pulse / Yeshie relay',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Host the Conversation tab polls for messages.\n'
+            'Web default: localhost:3333  •  Mobile default: Tailscale 100.72.65.118:3333',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: Theme.of(context).colorScheme.outline),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _yeshieHostCtrl,
+            decoration: InputDecoration(
+              labelText: 'Yeshie host',
+              hintText: Settings.defaultYeshieHost,
+              border: const OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.url,
+          ),
+          const Divider(height: 32),
           Text('Webhook', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextField(
