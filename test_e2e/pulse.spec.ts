@@ -336,6 +336,98 @@ test('K: /artifacts/file serves putoff-queue.json', async ({ page }) => {
   expect(Array.isArray(data.items), 'items should be an array').toBe(true);
 });
 
+// Test M: /dispatch/conversation endpoint is reachable and returns messages array
+test('M: /dispatch/conversation returns messages array', async ({ page }) => {
+  const convResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/dispatch/conversation?limit=50');
+    return { status: r.status, body: await r.json() };
+  });
+
+  expect(convResp.status, 'Expected 200 from /dispatch/conversation').toBe(200);
+  const messages = (convResp.body as any).messages;
+  expect(Array.isArray(messages), 'messages should be an array').toBe(true);
+
+  // If there are messages, verify the shape
+  if (messages.length > 0) {
+    const first = messages[0];
+    expect(first.from, 'Expected from field').toBeDefined();
+    expect(['mike', 'dee'].includes(first.from), `Expected from to be mike|dee, got ${first.from}`).toBe(true);
+    expect(first.ts, 'Expected ts field').toBeDefined();
+    expect(first.body, 'Expected body field').toBeDefined();
+  }
+
+  // Screenshot showing the Conversation tab (default tab)
+  await page.goto('http://localhost:8088');
+  await page.waitForTimeout(4000);
+  const screenshotsDir = path.join(process.env.HOME || '', 'Projects/SOMA/audits/screenshots');
+  if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const screenshotPath = path.join(screenshotsDir, `pulse-hud-r5-conversation-${ts}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(`Conversation tab screenshot: ${screenshotPath}`);
+});
+
+// Test N: POST to /pulse/capture then GET /dispatch/conversation shows the message
+test('N: capture then conversation shows message in thread', async ({ page }) => {
+  const testMsg = `playwright-r5-test-${Date.now()}`;
+
+  // Post a capture
+  const captureResp = await page.evaluate(async (msg: string) => {
+    const r = await fetch('http://localhost:3333/pulse/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: msg }),
+    });
+    return { status: r.status, body: await r.json() };
+  }, testMsg);
+
+  expect(captureResp.status, 'Expected 200 from /pulse/capture').toBe(200);
+  const capturedTs = (captureResp.body as any).timestamp as string;
+  expect(capturedTs, 'Expected timestamp from capture').toBeDefined();
+
+  // Fetch conversation and verify our message appears
+  const convResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/dispatch/conversation?limit=200');
+    return r.json();
+  });
+
+  const messages = (convResp as any).messages as any[];
+  expect(Array.isArray(messages)).toBe(true);
+  const found = messages.find((m: any) => m.body === testMsg);
+  expect(found, 'Expected our test message to appear in conversation').toBeDefined();
+  expect(found.from, 'Expected message to be from mike').toBe('mike');
+});
+
+// Test O: /dispatch/conversation ?since= filter returns only newer messages
+test('O: /dispatch/conversation since param filters messages', async ({ page }) => {
+  // Post a message and capture its timestamp
+  const captureResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/pulse/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'playwright-r5-since-test' }),
+    });
+    return r.json();
+  });
+
+  const sinceTs = (captureResp as any).timestamp as string;
+  expect(sinceTs, 'Expected timestamp from capture').toBeDefined();
+
+  // GET /dispatch/conversation?since=<ts> — should return empty (message was AT that ts, not after)
+  const filteredResp = await page.evaluate(async (since: string) => {
+    const r = await fetch(
+      `http://localhost:3333/dispatch/conversation?since=${encodeURIComponent(since)}&limit=200`
+    );
+    return r.json();
+  }, sinceTs);
+
+  const filtered = (filteredResp as any).messages as any[];
+  expect(Array.isArray(filtered), 'Expected array').toBe(true);
+  // Messages at or before sinceTs should be excluded
+  const hasOlder = filtered.some((m: any) => new Date(m.ts) <= new Date(sinceTs));
+  expect(hasOlder, 'Since filter should exclude messages at or before sinceTs').toBe(false);
+});
+
 // Test L: Quick-capture endpoint accepts POST and returns ok
 test('L: /pulse/capture accepts capture and returns ok', async ({ page }) => {
   const resp = await page.evaluate(async () => {
