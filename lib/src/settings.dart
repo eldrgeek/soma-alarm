@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +11,7 @@ class Settings {
   static const _kMorningMinute = 'morning_minute';
   static const _kLeadMinutes = 'lead_minutes';
   static const _kYeshieHost = 'yeshie_host';
+  static const _kDraftBatch = 'draft_batch_v1';
 
   static const defaultWebhook =
       'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
@@ -81,6 +84,24 @@ class Settings {
   static Future<void> setLeadMinutes(int v) async {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kLeadMinutes, v);
+  }
+
+  // Draft batch: persisted as JSON-encoded list of strings.
+  static Future<List<String>> draftBatch() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_kDraftBatch);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = (jsonDecode(raw) as List<dynamic>).cast<String>();
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveDraftBatch(List<String> batch) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kDraftBatch, jsonEncode(batch));
   }
 }
 

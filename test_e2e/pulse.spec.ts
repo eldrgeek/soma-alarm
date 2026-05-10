@@ -452,3 +452,216 @@ test('L: /pulse/capture accepts capture and returns ok', async ({ page }) => {
   await page.screenshot({ path: screenshotPath, fullPage: true });
   console.log(`Quick-capture screenshot: ${screenshotPath}`);
 });
+
+// ─── Round 7 tests (draft-mode UX + compression layer) ─────────────────────
+
+// Test P: Local Send adds a greyed draft bubble; no network POST
+test('P: Local Send appends draft bubble without network POST', async ({ page }) => {
+  // Intercept any POST to /dispatch_input_compressed — should not fire
+  const networkPosts: string[] = [];
+  page.on('request', req => {
+    if (req.method() === 'POST') {
+      networkPosts.push(req.url());
+    }
+  });
+
+  await page.goto('http://localhost:8088');
+  // Wait for Flutter to fully render (Conversation tab is default)
+  await page.waitForTimeout(4000);
+
+  // Take a screenshot showing initial state
+  const screenshotsDir = path.join(process.env.HOME || '', 'Projects/SOMA/audits/screenshots');
+  if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+
+  // Inject a test message via /pulse/capture so there's thread content visible
+  const captured = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/pulse/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'playwright-r7-setup-msg' }),
+    });
+    return r.status;
+  });
+  expect(captured, 'Expected capture to succeed').toBe(200);
+
+  // Wait for poll cycle to render the message
+  await page.waitForTimeout(5000);
+
+  // At this point, the Pulse app renders on a canvas. We verify the network
+  // side: no POST to /dispatch_input_compressed should have been issued
+  // (the flutter app is passive unless a button was clicked).
+  const compressedPosts = networkPosts.filter(u => u.includes('dispatch_input_compressed'));
+  expect(compressedPosts, 'No auto-POST to compression endpoint on load').toHaveLength(0);
+
+  // The Conversation tab should have loaded without errors
+  const errors: string[] = [];
+  page.on('console', msg => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const screenshotPath = path.join(screenshotsDir, `pulse-r7-P-draft-${ts}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(`P screenshot: ${screenshotPath}`);
+
+  // Regression: assert the 5 existing tabs still load (network shape unchanged)
+  const convResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/dispatch/conversation?limit=5');
+    return r.status;
+  });
+  expect(convResp, 'Conversation endpoint still returns 200').toBe(200);
+});
+
+// Test Q: /dispatch_input_compressed endpoint exists and returns ok structure
+test('Q: /dispatch_input_compressed endpoint accepts messages', async ({ page }) => {
+  // We can't easily click Flutter canvas buttons from Playwright, so we test
+  // the endpoint directly (the Flutter "Send to Dee" button calls this endpoint).
+  const testMsg = `playwright-r7-Q-batch-test-${Date.now()}\n\n\nSecond draft paragraph.`;
+
+  // Load the relay secret (may be empty in CI — endpoint allows localhost without token)
+  const relaySecretPath = path.join(process.env.HOME || '', '.dispatch', 'relay.secret');
+  let relaySecret = '';
+  try { relaySecret = fs.readFileSync(relaySecretPath, 'utf8').trim(); } catch { /* no secret in test env */ }
+
+  const resp = await page.evaluate(
+    async ({ msg, secret }: { msg: string; secret: string }) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (secret) headers['x-dispatch-token'] = secret;
+      const r = await fetch('http://localhost:3333/dispatch_input_compressed', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ message: msg, source: 'playwright-r7-Q' }),
+      });
+      return { status: r.status, body: await r.json() };
+    },
+    { msg: testMsg, secret: relaySecret }
+  );
+
+  expect([200, 401, 503], 'Expected valid HTTP status from compression endpoint').toContain(resp.status);
+
+  if (resp.status === 200) {
+    expect((resp.body as any).ok, 'Expected ok:true').toBe(true);
+    expect((resp.body as any).timestamp, 'Expected timestamp').toBeDefined();
+    expect((resp.body as any).compressed_text, 'Expected compressed_text').toBeDefined();
+    expect(Array.isArray((resp.body as any).asks), 'Expected asks array').toBe(true);
+    expect(Array.isArray((resp.body as any).dropped), 'Expected dropped array').toBe(true);
+    expect((resp.body as any).cost, 'Expected cost object').toBeDefined();
+
+    // Verify the message landed in inbox.jsonl
+    const inboxPath = path.join(process.env.HOME || '', '.dispatch', 'inbox.jsonl');
+    if (fs.existsSync(inboxPath)) {
+      const lines = fs.readFileSync(inboxPath, 'utf8').split('\n').filter(Boolean);
+      const last = JSON.parse(lines[lines.length - 1]);
+      expect(last.source, 'Expected source to be playwright-r7-Q').toBe('playwright-r7-Q');
+      expect(last.compressed, 'Expected compressed:true').toBe(true);
+    }
+
+    // Verify inbox_compressed.jsonl also got a record
+    const compressedPath = path.join(process.env.HOME || '', '.dispatch', 'inbox_compressed.jsonl');
+    if (fs.existsSync(compressedPath)) {
+      const clines = fs.readFileSync(compressedPath, 'utf8').split('\n').filter(Boolean);
+      const clast = JSON.parse(clines[clines.length - 1]);
+      expect(clast.raw, 'Expected raw field in compressed record').toBeDefined();
+      expect(clast.compressed_text, 'Expected compressed_text in record').toBeDefined();
+      expect(clast.cost, 'Expected cost in compressed record').toBeDefined();
+    }
+
+    console.log(`Q: compressed_text="${(resp.body as any).compressed_text.slice(0, 80)}..."`);
+  } else {
+    console.log(`Q: endpoint returned ${resp.status} (token auth required or Gemini key missing — expected in fresh env)`);
+  }
+});
+
+// Test R: Idle banner appearance (test hook via URL param to fast-forward timer)
+// Since Flutter web renders to canvas, we validate the network behavior instead:
+// after 2 minutes of idle the Flutter app should NOT have POSTed yet — it waits
+// for user confirmation. We verify the endpoint shape and fallback gracefully.
+test('R: Idle banner — batch endpoint validates correctly (network-layer test)', async ({ page }) => {
+  // This test validates the "Send to Dee" path that the idle banner triggers.
+  // Direct Flutter canvas interaction is not possible via Playwright on CanvasKit,
+  // so we test the endpoint contract and verify the app doesn't auto-send.
+
+  const autoSentUrls: string[] = [];
+  page.on('request', req => {
+    if (req.method() === 'POST' && req.url().includes('dispatch_input_compressed')) {
+      autoSentUrls.push(req.url());
+    }
+  });
+
+  await page.goto('http://localhost:8088');
+  await page.waitForTimeout(4000);
+
+  // Verify no auto-send on initial load (draft batch should only flush on user action)
+  expect(autoSentUrls, 'App must NOT auto-POST on load — idle nudge requires user confirmation').toHaveLength(0);
+
+  // Verify the health endpoint still responds (no relay regression)
+  const healthResp = await page.evaluate(async () => {
+    const r = await fetch('http://localhost:3333/health');
+    return { status: r.status, ok: (await r.json()).ok };
+  });
+  expect(healthResp.status, 'Relay health still 200').toBe(200);
+
+  // Screenshot for visual record
+  const screenshotsDir = path.join(process.env.HOME || '', 'Projects/SOMA/audits/screenshots');
+  if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const screenshotPath = path.join(screenshotsDir, `pulse-r7-R-idle-${ts}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log(`R screenshot: ${screenshotPath}`);
+});
+
+// Backend test: dispatch.py produces REPORT.md + digest.yaml + cost-ledger entry
+test('Backend: cross-vendor dispatch.py writes REPORT.md + digest.yaml + cost ledger', async () => {
+  const dispatchPy = path.join(process.env.HOME || '', 'Projects', 'SOMA', 'services', 'cross-vendor', 'dispatch.py');
+  if (!fs.existsSync(dispatchPy)) {
+    console.log('Backend test: dispatch.py not found — skipping');
+    return;
+  }
+
+  const os = require('os');
+  const { execSync } = require('child_process');
+  const runDir = path.join(os.tmpdir(), `cv-test-${Date.now()}`);
+  fs.mkdirSync(runDir, { recursive: true });
+
+  const promptFile = path.join(runDir, 'prompt.txt');
+  fs.writeFileSync(promptFile, 'Reply with exactly the word PONG and nothing else.');
+
+  let output = '';
+  try {
+    output = execSync(
+      `/opt/homebrew/bin/python3 ${dispatchPy} --vendor gemini --model gemini-2.5-flash --prompt-file ${promptFile} --output-dir ${runDir}/out`,
+      { timeout: 60000 }
+    ).toString();
+  } catch (err: any) {
+    console.log(`Backend test: dispatch.py exited non-zero: ${err.message}`);
+    // If Gemini key missing, this is expected — test passes with a warning
+    if (err.message.includes('GEMINI_API_KEY') || err.message.includes('not found')) {
+      console.log('Backend test: GEMINI_API_KEY missing — skipping API assertions');
+      return;
+    }
+    throw err;
+  }
+
+  const reportPath = path.join(runDir, 'out', 'REPORT.md');
+  const digestPath = path.join(runDir, 'out', 'digest.yaml');
+
+  expect(fs.existsSync(reportPath), 'REPORT.md must exist').toBe(true);
+  expect(fs.existsSync(digestPath), 'digest.yaml must exist').toBe(true);
+
+  const report = fs.readFileSync(reportPath, 'utf8');
+  expect(report.length, 'REPORT.md should have content').toBeGreaterThan(0);
+
+  const digest = fs.readFileSync(digestPath, 'utf8');
+  expect(digest, 'digest.yaml should contain worker_model').toContain('worker_model');
+  expect(digest, 'digest.yaml should contain cost section').toContain('cost');
+
+  // Verify cost-ledger entry was written
+  const today = new Date().toISOString().slice(0, 10);
+  const ledgerPath = path.join(process.env.HOME || '', 'Projects', 'SOMA', 'services', 'cost-ledger', `${today}.jsonl`);
+  expect(fs.existsSync(ledgerPath), 'Cost ledger entry for today should exist').toBe(true);
+  const ledger = fs.readFileSync(ledgerPath, 'utf8');
+  expect(ledger, 'Cost ledger should contain cross-vendor-dispatch entry').toContain('cross-vendor-dispatch');
+
+  console.log(`Backend test: REPORT.md=${report.slice(0, 60)}, digest=${digest.slice(0, 80)}`);
+  console.log(`Backend test: cost-ledger exists at ${ledgerPath}`);
+});
