@@ -12,6 +12,7 @@ import 'webhook.dart';
 
 const String kEventChannel = 'soma_event_alarms_v2';
 const String kMorningChannel = 'soma_morning_alarm_v2';
+const String kDeeRepliesChannel = 'dee-replies';
 const String _kOldEventChannel = 'soma_event_alarms';
 const String _kOldMorningChannel = 'soma_morning_alarm';
 
@@ -139,7 +140,27 @@ class AlarmService {
       vibrationPattern: vibPattern,
     ));
 
+    await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+      kDeeRepliesChannel,
+      'Dee replies',
+      description: 'Notifications when Dee responds in Pulse.',
+      importance: Importance.high,
+    ));
+
     _initialized = true;
+  }
+
+  Future<void> notifyDeeReply(String preview) async {
+    if (!_initialized || kIsWeb) return;
+    final body = preview.length > 120 ? '${preview.substring(0, 120)}…' : preview;
+    const details = AndroidNotificationDetails(
+      kDeeRepliesChannel,
+      'Dee replies',
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(9001, 'Dee', body, const NotificationDetails(android: details));
   }
 
   int _idFor(String eventId, {required bool lead}) {
