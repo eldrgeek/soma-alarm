@@ -4,11 +4,24 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
+import 'alarms.dart';
 import 'settings.dart';
 
 class ConversationScreen extends StatefulWidget {
-  const ConversationScreen({super.key});
+  /// True when this tab is the currently selected one in the shell.
+  final bool isActive;
+
+  /// Called when the user taps "View" on the in-app Dee reply toast,
+  /// so the shell can switch back to this tab.
+  final VoidCallback? onRequestFocus;
+
+  const ConversationScreen({
+    super.key,
+    this.isActive = true,
+    this.onRequestFocus,
+  });
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -30,6 +43,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _sendSuccess = false;
   Timer? _pollTimer;
   String? _lastTs;
+  bool _initialLoadDone = false;
+  AppLifecycleState _appLifecycle = AppLifecycleState.resumed;
 
   // ── Draft-batch state ────────────────────────────────────────────────
   List<String> _draftBatch = [];
@@ -88,6 +103,7 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    setState(() => _appLifecycle = state);
     final active = state == AppLifecycleState.resumed;
     _startPolling(active: active);
     if (!active && _draftBatch.isNotEmpty) {
@@ -119,6 +135,18 @@ class _ConversationScreenState extends State<ConversationScreen>
             .map((e) => _Message.fromJson(e as Map<String, dynamic>))
             .toList();
         if (newMsgs.isNotEmpty) {
+          if (_initialLoadDone && newMsgs.any((m) => m.from == 'dee')) {
+            final first = newMsgs.firstWhere((m) => m.from == 'dee');
+            final foregrounded = _appLifecycle == AppLifecycleState.resumed;
+            if (!foregrounded) {
+              // App is backgrounded — fire OS notification.
+              AlarmService.instance.notifyDeeReply(first.body);
+            } else if (!widget.isActive) {
+              // App is foregrounded but user is on a different tab — show toast.
+              _showDeeReplyToast(first.body);
+            }
+            // Foregrounded + on this screen → new message renders inline; no notification.
+          }
           setState(() {
             _messages = _lastTs == null
                 ? newMsgs
@@ -129,6 +157,7 @@ class _ConversationScreenState extends State<ConversationScreen>
         }
       }
     } catch (_) {}
+    if (!_initialLoadDone) _initialLoadDone = true;
   }
 
   void _scrollToBottom() {
@@ -263,6 +292,19 @@ class _ConversationScreenState extends State<ConversationScreen>
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showDeeReplyToast(String preview) {
+    final trimmed = preview.length > 80 ? '${preview.substring(0, 80)}…' : preview;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Dee: $trimmed'),
+        duration: const Duration(seconds: 4),
+        action: widget.onRequestFocus != null
+            ? SnackBarAction(label: 'View', onPressed: widget.onRequestFocus!)
+            : null,
+      ),
     );
   }
 
@@ -551,6 +593,14 @@ class _MessageBubble extends StatelessWidget {
                                 backgroundColor: theme.colorScheme.surface,
                                 color: theme.colorScheme.onSurface),
                           ),
+                          onTapLink: (text, href, title) {
+                            if (href != null) {
+                              launchUrl(
+                                Uri.parse(href),
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
                         ),
                   const SizedBox(height: 4),
                   Text(

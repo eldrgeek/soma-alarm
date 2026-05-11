@@ -65,12 +65,15 @@ class _WebShellState extends State<WebShell> {
               children: [
                 IndexedStack(
                   index: _selectedIndex,
-                  children: const [
-                    ConversationScreen(),
-                    JobsScreen(),
-                    ActivityScreen(),
-                    PutoffScreen(),
-                    HealthScreen(),
+                  children: [
+                    ConversationScreen(
+                      isActive: _selectedIndex == 0,
+                      onRequestFocus: () => setState(() => _selectedIndex = 0),
+                    ),
+                    const JobsScreen(),
+                    const ActivityScreen(),
+                    const PutoffScreen(),
+                    const HealthScreen(),
                   ],
                 ),
                 const Positioned(
