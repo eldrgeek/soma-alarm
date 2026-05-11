@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
+
 Color _jobStatusColor(String status) => switch (status) {
       'complete' => Colors.green,
       'running' => Colors.blue,
@@ -38,14 +40,21 @@ class _JobsScreenState extends State<JobsScreen> {
   bool _loadingDetail = false;
   Timer? _logTailTimer;
 
-  static const _base = 'http://localhost:3333';
+  String _base = Settings.defaultYeshieHost;
 
   @override
   void initState() {
     super.initState();
-    _poll();
-    _fetchTags();
-    _startPolling();
+    _loadHost().then((_) {
+      _poll();
+      _fetchTags();
+      _startPolling();
+    });
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _base = host);
   }
 
   void _startPolling() {

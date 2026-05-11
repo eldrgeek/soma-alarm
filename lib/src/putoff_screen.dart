@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
+
 class PutoffScreen extends StatefulWidget {
   const PutoffScreen({super.key});
 
@@ -18,13 +20,18 @@ class _PutoffScreenState extends State<PutoffScreen> {
 
   Map<String, dynamic>? _selected;
 
-  static const _base = 'http://localhost:3333';
+  String _base = Settings.defaultYeshieHost;
   static const _queuePath = '~/Projects/SOMA/state/putoff-queue.json';
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadHost().then((_) => _load());
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _base = host);
   }
 
   Future<void> _load() async {

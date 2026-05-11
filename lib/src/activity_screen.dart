@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
+
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
 
@@ -22,13 +24,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
   String? _content;
   bool _loadingDetail = false;
 
-  static const _base = 'http://localhost:3333';
+  String _base = Settings.defaultYeshieHost;
 
   @override
   void initState() {
     super.initState();
-    _poll();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
+    _loadHost().then((_) {
+      _poll();
+      _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _poll());
+    });
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _base = host);
   }
 
   @override

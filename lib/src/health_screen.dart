@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
+
 class HealthScreen extends StatefulWidget {
   const HealthScreen({super.key});
 
@@ -17,13 +19,20 @@ class _HealthScreenState extends State<HealthScreen> {
   Timer? _timer;
   bool _fetching = false;
 
-  static const _relayBase = 'http://localhost:3333';
+  String _relayBase = Settings.defaultYeshieHost;
 
   @override
   void initState() {
     super.initState();
-    _fetch();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _fetch());
+    _loadHost().then((_) {
+      _fetch();
+      _timer = Timer.periodic(const Duration(seconds: 5), (_) => _fetch());
+    });
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _relayBase = host);
   }
 
   @override

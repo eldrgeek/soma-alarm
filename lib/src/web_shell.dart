@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'settings.dart';
 import 'activity_screen.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
@@ -90,7 +91,18 @@ class _QuickCaptureBarState extends State<_QuickCaptureBar> {
   bool _sending = false;
   bool _success = false;
 
-  static const _base = 'http://localhost:3333';
+  String _base = Settings.defaultYeshieHost;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHost();
+  }
+
+  Future<void> _loadHost() async {
+    final host = await Settings.yeshieHost();
+    if (mounted) setState(() => _base = host);
+  }
 
   Future<void> _send() async {
     final text = _controller.text.trim();
