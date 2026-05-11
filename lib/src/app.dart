@@ -28,7 +28,7 @@ class SomaAlarmApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         themeMode: ThemeMode.dark,
         darkTheme: themeProvider.themeData,
-        home: kIsWeb ? const WebShell() : const HomePage(),
+        home: const WebShell(),
       ),
     );
   }
