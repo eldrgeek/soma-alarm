@@ -9,6 +9,7 @@ import 'conversation_screen.dart';
 import 'health_screen.dart';
 import 'jobs_screen.dart';
 import 'putoff_screen.dart';
+import 'version_chip.dart';
 
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
@@ -60,14 +61,23 @@ class _WebShellState extends State<WebShell> {
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: IndexedStack(
-              index: _selectedIndex,
-              children: const [
-                ConversationScreen(),
-                JobsScreen(),
-                ActivityScreen(),
-                PutoffScreen(),
-                HealthScreen(),
+            child: Stack(
+              children: [
+                IndexedStack(
+                  index: _selectedIndex,
+                  children: const [
+                    ConversationScreen(),
+                    JobsScreen(),
+                    ActivityScreen(),
+                    PutoffScreen(),
+                    HealthScreen(),
+                  ],
+                ),
+                const Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: VersionChip(),
+                ),
               ],
             ),
           ),

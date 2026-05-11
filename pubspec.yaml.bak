@@ -1,7 +1,7 @@
 name: sidekick
 description: "Sidekick (Pixel) — calendar alarm + morning routine. User-facing brand: Pulse."
 publish_to: 'none'
-version: 0.2.4+9
+version: 0.1.0+2
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -23,7 +23,6 @@ dependencies:
   google_fonts: ^6.2.1
   provider: ^6.1.2
   flutter_markdown: ^0.7.3
-  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:
