@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -46,6 +47,12 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _initialLoadDone = false;
   AppLifecycleState _appLifecycle = AppLifecycleState.resumed;
 
+  // ── Smart scroll state ────────────────────────────────────────────────
+  int _unreadCount = 0;
+
+  // ── Send dedup: body → expiry, prevents echoing optimistic messages ───
+  final Map<String, DateTime> _pendingEchoes = {};
+
   // ── Draft-batch state ────────────────────────────────────────────────
   List<String> _draftBatch = [];
   bool _showIdleBanner = false;
@@ -62,6 +69,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     });
     _loadDraftBatch();
     _inputController.addListener(_onInputChanged);
+    _scrollController.addListener(_onScroll);
   }
 
   Future<void> _loadHost() async {
@@ -72,6 +80,29 @@ class _ConversationScreenState extends State<ConversationScreen>
   Future<void> _loadDraftBatch() async {
     final batch = await Settings.draftBatch();
     if (mounted) setState(() => _draftBatch = batch);
+  }
+
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    final pos = _scrollController.position;
+    return pos.pixels >= pos.maxScrollExtent - 150;
+  }
+
+  void _onScroll() {
+    if (_isNearBottom && _unreadCount > 0) {
+      setState(() => _unreadCount = 0);
+    }
+  }
+
+  void _jumpToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+      setState(() => _unreadCount = 0);
+    }
   }
 
   void _onInputChanged() {
@@ -135,9 +166,11 @@ class _ConversationScreenState extends State<ConversationScreen>
             .map((e) => _Message.fromJson(e as Map<String, dynamic>))
             .toList();
         if (newMsgs.isNotEmpty) {
+          // Notification guard — inactive covers brief focus loss (shade pull, tap).
           if (_initialLoadDone && newMsgs.any((m) => m.from == 'dee')) {
             final first = newMsgs.firstWhere((m) => m.from == 'dee');
-            final foregrounded = _appLifecycle == AppLifecycleState.resumed;
+            final foregrounded = _appLifecycle == AppLifecycleState.resumed ||
+                _appLifecycle == AppLifecycleState.inactive;
             if (!foregrounded) {
               // App is backgrounded — fire OS notification.
               AlarmService.instance.notifyDeeReply(first.body);
@@ -147,22 +180,44 @@ class _ConversationScreenState extends State<ConversationScreen>
             }
             // Foregrounded + on this screen → new message renders inline; no notification.
           }
+
+          // Dedup: filter out server echoes of messages we sent optimistically.
+          _pendingEchoes.removeWhere((_, expiry) => expiry.isBefore(DateTime.now()));
+          final dedupedMsgs = newMsgs.where((m) {
+            if (m.from != 'mike') return true;
+            if (_pendingEchoes.containsKey(m.body)) {
+              _pendingEchoes.remove(m.body);
+              return false;
+            }
+            return true;
+          }).toList();
+
+          final isInitial = _lastTs == null;
           setState(() {
-            _messages = _lastTs == null
-                ? newMsgs
-                : [..._messages, ...newMsgs];
-            _lastTs = _messages.last.ts;
+            if (dedupedMsgs.isNotEmpty) {
+              _messages = isInitial ? dedupedMsgs : [..._messages, ...dedupedMsgs];
+            }
+            // Always advance _lastTs past received messages so we don't re-fetch them.
+            _lastTs = newMsgs.last.ts;
           });
-          _scrollToBottom();
+
+          if (dedupedMsgs.isNotEmpty) {
+            if (isInitial || _isNearBottom) {
+              _scrollToBottom();
+            } else {
+              setState(() => _unreadCount += dedupedMsgs.length);
+            }
+          }
         }
       }
     } catch (_) {}
     if (!_initialLoadDone) _initialLoadDone = true;
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool force = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
+      if (!_scrollController.hasClients) return;
+      if (force || _isNearBottom) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
           duration: const Duration(milliseconds: 250),
@@ -184,7 +239,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     });
     await Settings.saveDraftBatch(newBatch);
     _resetIdleTimer();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
   // ── Remove a draft from the batch ───────────────────────────────────
@@ -230,6 +285,12 @@ class _ConversationScreenState extends State<ConversationScreen>
                   source: 'pulse-draft-batch',
                 ))
             .toList();
+        // Register individual drafts and combined text so echoes are suppressed.
+        final echoExpiry = DateTime.now().add(const Duration(seconds: 60));
+        for (final draft in _draftBatch) {
+          _pendingEchoes[draft] = echoExpiry;
+        }
+        _pendingEchoes[combined] = echoExpiry;
         setState(() {
           _messages = [..._messages, ...sentMessages];
           _lastTs = now;
@@ -237,7 +298,7 @@ class _ConversationScreenState extends State<ConversationScreen>
         });
         await Settings.saveDraftBatch([]);
         _idleTimer?.cancel();
-        _scrollToBottom();
+        _scrollToBottom(force: true);
       } else {
         _showError('Send failed: HTTP ${resp.statusCode}');
       }
@@ -250,17 +311,20 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   // ── Quick "Send now" — bypass batch, send directly ───────────────────
   Future<void> _sendNow() async {
+    if (_sending) return;
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
     setState(() => _sending = true);
     final optimisticTs = DateTime.now().toUtc().toIso8601String();
     final optimistic = _Message(from: 'mike', ts: optimisticTs, body: text, source: 'pulse-quickcapture');
+    // Register so the server echo is suppressed when the next poll returns it.
+    _pendingEchoes[text] = DateTime.now().add(const Duration(seconds: 60));
     setState(() {
       _messages = [..._messages, optimistic];
       _lastTs = optimisticTs;
     });
     _inputController.clear();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
 
     try {
       final resp = await http.post(
@@ -324,23 +388,64 @@ class _ConversationScreenState extends State<ConversationScreen>
 
         // ── Thread ────────────────────────────────────────────────────
         Expanded(
-          child: _messages.isEmpty && _draftBatch.isEmpty
-              ? _EmptyState()
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  itemCount: _messages.length + _draftBatch.length,
-                  itemBuilder: (ctx, i) {
-                    if (i < _messages.length) {
-                      return _MessageBubble(msg: _messages[i]);
-                    }
-                    final draftIndex = i - _messages.length;
-                    return _DraftBubble(
-                      text: _draftBatch[draftIndex],
-                      onRemove: () => _removeDraft(draftIndex),
-                    );
-                  },
+          child: Stack(
+            children: [
+              _messages.isEmpty && _draftBatch.isEmpty
+                  ? _EmptyState()
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      itemCount: _messages.length + _draftBatch.length,
+                      itemBuilder: (ctx, i) {
+                        if (i < _messages.length) {
+                          return _MessageBubble(msg: _messages[i]);
+                        }
+                        final draftIndex = i - _messages.length;
+                        return _DraftBubble(
+                          text: _draftBatch[draftIndex],
+                          onRemove: () => _removeDraft(draftIndex),
+                        );
+                      },
+                    ),
+              // ── ↓ N new pill — shown when scrolled up with arrivals ──
+              if (_unreadCount > 0)
+                Positioned(
+                  bottom: 8,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: _jumpToBottom,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.arrow_downward, color: Colors.white, size: 14),
+                            const SizedBox(width: 5),
+                            Text(
+                              '$_unreadCount new',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
+            ],
+          ),
         ),
 
         // ── Input bar ─────────────────────────────────────────────────
@@ -668,7 +773,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Local Send saves it as a draft.\nSend to Dee flushes drafts.',
+            'Tap send to message Dee. Long-press to save locally.\nSend to Dee flushes drafts.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
@@ -733,53 +838,112 @@ class _InputBar extends StatelessWidget {
                   textInputAction: TextInputAction.newline,
                 ),
               ),
-              // Send Now (always-visible escape hatch)
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: success
-                    ? const Icon(Icons.check_circle,
-                        key: ValueKey('ok'), color: Colors.green, size: 22)
-                    : sending
-                        ? const SizedBox(
-                            key: ValueKey('spin'),
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : IconButton(
-                            key: const ValueKey('send-now'),
-                            icon: const Icon(Icons.send, size: 20),
-                            tooltip: 'Send now',
-                            onPressed: onSendNow,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
+              // Dual-mode send: tap = send to Dee, long-press = local draft
+              _DualSendButton(
+                sending: sending,
+                flushing: flushing,
+                success: success,
+                onSendNow: onSendNow,
+                onLocalSend: onLocalSend,
               ),
             ],
           ),
-          // Local Send + Send to Dee buttons
-          Row(
-            children: [
-              _SmallButton(
-                label: 'Local Send',
-                icon: Icons.inbox,
-                tooltip: 'Save as draft (no network)',
-                onPressed: onLocalSend,
-                enabled: !sending && !flushing,
+          // Send to Dee button (visible when drafts are queued)
+          if (hasDrafts)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _SmallButton(
+                label: flushing ? 'Sending…' : 'Send to Dee',
+                icon: Icons.send_to_mobile,
+                tooltip: 'Flush drafts to Dee via compression layer',
+                onPressed: flushing ? null : onSendToDee,
+                enabled: !flushing,
+                primary: true,
               ),
-              const SizedBox(width: 8),
-              if (hasDrafts)
-                _SmallButton(
-                  label: flushing ? 'Sending…' : 'Send to Dee',
-                  icon: Icons.send_to_mobile,
-                  tooltip: 'Flush drafts to Dee via compression layer',
-                  onPressed: flushing ? null : onSendToDee,
-                  enabled: !flushing,
-                  primary: true,
-                ),
-            ],
-          ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+// Tap = send to Dee; long-press = save locally with haptic + toast.
+class _DualSendButton extends StatefulWidget {
+  final bool sending;
+  final bool flushing;
+  final bool success;
+  final VoidCallback onSendNow;
+  final VoidCallback onLocalSend;
+
+  const _DualSendButton({
+    required this.sending,
+    required this.flushing,
+    required this.success,
+    required this.onSendNow,
+    required this.onLocalSend,
+  });
+
+  @override
+  State<_DualSendButton> createState() => _DualSendButtonState();
+}
+
+class _DualSendButtonState extends State<_DualSendButton> {
+  bool _pressing = false;
+
+  void _onLongPress() {
+    setState(() => _pressing = false);
+    HapticFeedback.mediumImpact();
+    widget.onLocalSend();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sent locally'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: widget.success
+          ? const Icon(Icons.check_circle,
+              key: ValueKey('ok'), color: Colors.green, size: 22)
+          : widget.sending
+              ? const SizedBox(
+                  key: ValueKey('spin'),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : GestureDetector(
+                  key: const ValueKey('send-now'),
+                  onTap: widget.onSendNow,
+                  onLongPress: _onLongPress,
+                  onLongPressStart: (_) => setState(() => _pressing = true),
+                  onLongPressEnd: (_) => setState(() => _pressing = false),
+                  onLongPressCancel: () => setState(() => _pressing = false),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      decoration: BoxDecoration(
+                        color: _pressing
+                            ? theme.colorScheme.tertiary.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        Icons.send,
+                        size: 20,
+                        color: _pressing
+                            ? theme.colorScheme.tertiary
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
     );
   }
 }
