@@ -422,7 +422,9 @@ class _JobsScreenState extends State<JobsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return _selectedJob != null ? _buildDetail(context) : _buildList(context);
+    return SelectionArea(
+      child: _selectedJob != null ? _buildDetail(context) : _buildList(context),
+    );
   }
 
   Widget _buildList(BuildContext context) {

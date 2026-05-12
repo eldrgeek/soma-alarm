@@ -68,7 +68,7 @@ class _HealthScreenState extends State<HealthScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return SelectionArea(child: Scaffold(
       appBar: AppBar(
         title: const Text('Pulse — Health'),
         actions: [
@@ -89,7 +89,7 @@ class _HealthScreenState extends State<HealthScreen> {
           : _health == null
               ? const Center(child: CircularProgressIndicator())
               : _buildBody(theme),
-    );
+    ));
   }
 
   Widget _buildBody(ThemeData theme) {

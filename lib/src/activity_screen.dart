@@ -103,8 +103,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
       });
 
   @override
-  Widget build(BuildContext context) =>
-      _selected != null ? _buildDetail(context) : _buildList(context);
+  Widget build(BuildContext context) => SelectionArea(
+        child: _selected != null ? _buildDetail(context) : _buildList(context),
+      );
 
   Widget _buildList(BuildContext context) {
     if (_error != null && _items.isEmpty) {

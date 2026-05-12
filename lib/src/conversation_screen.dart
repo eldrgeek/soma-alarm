@@ -94,7 +94,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool get _isNearBottom {
     if (!_scrollController.hasClients) return true;
     final pos = _scrollController.position;
-    return pos.pixels >= pos.maxScrollExtent - 150;
+    return pos.pixels >= pos.maxScrollExtent - 300;
   }
 
   void _onScroll() {
@@ -466,7 +466,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    return SelectionArea(child: Column(
       children: [
         // ── Idle / blur nudge banner ──────────────────────────────────
         if (_showIdleBanner && _draftBatch.isNotEmpty)
@@ -568,7 +568,7 @@ class _ConversationScreenState extends State<ConversationScreen>
           onRemoveImage: () => setState(() => _pendingImage = null),
         ),
       ],
-    );
+    ));
   }
 }
 
