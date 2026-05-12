@@ -80,30 +80,32 @@ class PulseCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context),
-            if (card.body != null && card.body!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(card.body!, style: Theme.of(context).textTheme.bodyMedium),
+    return SelectionArea(
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(context),
+              if (card.body != null && card.body!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(card.body!, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+              if (card.type == PulseCardType.checklist) ...[
+                const SizedBox(height: 12),
+                _buildChecklist(context),
+              ],
+              if (card.actions.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _buildActions(context),
+              ],
             ],
-            if (card.type == PulseCardType.checklist) ...[
-              const SizedBox(height: 12),
-              _buildChecklist(context),
-            ],
-            if (card.actions.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildActions(context),
-            ],
-          ],
+          ),
         ),
       ),
     );

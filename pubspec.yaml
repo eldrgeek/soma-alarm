@@ -25,6 +25,7 @@ dependencies:
   flutter_markdown: ^0.7.3
   url_launcher: ^6.3.0
   package_info_plus: ^8.0.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

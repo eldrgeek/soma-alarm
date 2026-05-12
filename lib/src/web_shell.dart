@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'settings.dart';
 import 'activity_screen.dart';
+import 'campus_screen.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
 import 'jobs_screen.dart';
@@ -19,17 +20,81 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex = 0; // 0=Conversation(default) 1=Jobs 2=Activity 3=Putoff 4=Health
+  int _selectedIndex = 0; // 0=Conversation 1=Jobs 2=Activity 3=Putoff 4=Health 5=Campus
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.of(context).size.width < 600;
+
+    final screenStack = IndexedStack(
+      index: _selectedIndex,
+      children: [
+        ConversationScreen(
+          isActive: _selectedIndex == 0,
+          onRequestFocus: () => setState(() => _selectedIndex = 0),
+        ),
+        const JobsScreen(),
+        const ActivityScreen(),
+        const PutoffScreen(),
+        const HealthScreen(),
+        const CampusScreen(),
+      ],
+    );
+
+    if (isNarrow) {
+      return Scaffold(
+        body: Stack(
+          children: [
+            screenStack,
+            const Positioned(right: 8, bottom: 64, child: VersionChip()),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline),
+              selectedIcon: Icon(Icons.chat_bubble),
+              label: 'Pulse',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.work_outline),
+              selectedIcon: Icon(Icons.work),
+              label: 'Jobs',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.dynamic_feed_outlined),
+              selectedIcon: Icon(Icons.dynamic_feed),
+              label: 'Activity',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.pause_circle_outline),
+              selectedIcon: Icon(Icons.pause_circle),
+              label: 'Putoff',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.monitor_heart_outlined),
+              selectedIcon: Icon(Icons.monitor_heart),
+              label: 'Health',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.explore_outlined),
+              selectedIcon: Icon(Icons.explore),
+              label: 'Campus',
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (i) =>
-                setState(() => _selectedIndex = i),
+            onDestinationSelected: (i) => setState(() => _selectedIndex = i),
             labelType: NavigationRailLabelType.all,
             destinations: const [
               NavigationRailDestination(
@@ -57,25 +122,18 @@ class _WebShellState extends State<WebShell> {
                 selectedIcon: Icon(Icons.monitor_heart),
                 label: Text('Health'),
               ),
+              NavigationRailDestination(
+                icon: Icon(Icons.explore_outlined),
+                selectedIcon: Icon(Icons.explore),
+                label: Text('Campus'),
+              ),
             ],
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
             child: Stack(
               children: [
-                IndexedStack(
-                  index: _selectedIndex,
-                  children: [
-                    ConversationScreen(
-                      isActive: _selectedIndex == 0,
-                      onRequestFocus: () => setState(() => _selectedIndex = 0),
-                    ),
-                    const JobsScreen(),
-                    const ActivityScreen(),
-                    const PutoffScreen(),
-                    const HealthScreen(),
-                  ],
-                ),
+                screenStack,
                 const Positioned(
                   right: 8,
                   bottom: 8,

@@ -514,18 +514,20 @@ class _LogTailViewState extends State<_LogTailView> {
     }
     return Container(
       color: const Color(0xFF0D0D0D),
-      child: Scrollbar(
-        controller: _scrollController,
-        child: SingleChildScrollView(
+      child: SelectionArea(
+        child: Scrollbar(
           controller: _scrollController,
-          padding: const EdgeInsets.all(12),
-          child: SelectableText(
-            widget.logContent!,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: Color(0xFFD4D4D4),
-              height: 1.4,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              widget.logContent!,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: Color(0xFFD4D4D4),
+                height: 1.4,
+              ),
             ),
           ),
         ),

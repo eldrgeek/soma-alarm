@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'alarms.dart';
@@ -42,6 +45,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   List<_Message> _messages = [];
   bool _sending = false;
   bool _sendSuccess = false;
+  bool _fetching = false;
   Timer? _pollTimer;
   String? _lastTs;
   bool _initialLoadDone = false;
@@ -49,15 +53,20 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   // ── Smart scroll state ────────────────────────────────────────────────
   int _unreadCount = 0;
+  bool _showScrollFab = false;
 
-  // ── Send dedup: body → expiry, prevents echoing optimistic messages ───
-  final Map<String, DateTime> _pendingEchoes = {};
+  // ── Send dedup: clientId → optimistic _Message (null = batch, swallow on echo) ──
+  final Map<String, _Message?> _pendingClientIds = {};
 
   // ── Draft-batch state ────────────────────────────────────────────────
   List<String> _draftBatch = [];
   bool _showIdleBanner = false;
   Timer? _idleTimer;
   bool _flushing = false;
+
+  // ── Image attachment state ────────────────────────────────────────────
+  final _imagePicker = ImagePicker();
+  XFile? _pendingImage;
 
   @override
   void initState() {
@@ -89,9 +98,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   void _onScroll() {
-    if (_isNearBottom && _unreadCount > 0) {
-      setState(() => _unreadCount = 0);
-    }
+    final atBottom = _isNearBottom;
+    setState(() {
+      _showScrollFab = !atBottom;
+      if (atBottom) _unreadCount = 0;
+    });
   }
 
   void _jumpToBottom() {
@@ -152,6 +163,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   Future<void> _fetchMessages() async {
+    if (_fetching) return;
+    _fetching = true;
     final uri = Uri.parse(
       _lastTs != null
           ? '$_base/dispatch/conversation?since=${Uri.encodeComponent(_lastTs!)}&limit=200'
@@ -159,7 +172,10 @@ class _ConversationScreenState extends State<ConversationScreen>
     );
     try {
       final resp = await http.get(uri).timeout(const Duration(seconds: 5));
-      if (!mounted) return;
+      if (!mounted) {
+        _fetching = false;
+        return;
+      }
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final newMsgs = (data['messages'] as List<dynamic>)
@@ -181,19 +197,26 @@ class _ConversationScreenState extends State<ConversationScreen>
             // Foregrounded + on this screen → new message renders inline; no notification.
           }
 
-          // Dedup: filter out server echoes of messages we sent optimistically.
-          _pendingEchoes.removeWhere((_, expiry) => expiry.isBefore(DateTime.now()));
+          // Dedup: match server echoes to optimistic messages by clientId.
+          // Swallow exact-body echoes; replace optimistic copy when body differs.
+          final Map<int, _Message> replacements = {};
           final dedupedMsgs = newMsgs.where((m) {
-            if (m.from != 'mike') return true;
-            if (_pendingEchoes.containsKey(m.body)) {
-              _pendingEchoes.remove(m.body);
-              return false;
-            }
-            return true;
+            if (m.from != 'mike' || m.clientId == null) return true;
+            if (!_pendingClientIds.containsKey(m.clientId!)) return true;
+            final optimistic = _pendingClientIds.remove(m.clientId!);
+            if (optimistic == null) return false; // batch send → swallow
+            if (m.body == optimistic.body) return false; // exact match → swallow
+            // Body differs (e.g. compressed) → replace optimistic in list
+            final idx = _messages.indexOf(optimistic);
+            if (idx >= 0) replacements[idx] = m;
+            return false;
           }).toList();
 
           final isInitial = _lastTs == null;
           setState(() {
+            for (final e in replacements.entries) {
+              _messages[e.key] = e.value;
+            }
             if (dedupedMsgs.isNotEmpty) {
               _messages = isInitial ? dedupedMsgs : [..._messages, ...dedupedMsgs];
             }
@@ -211,6 +234,7 @@ class _ConversationScreenState extends State<ConversationScreen>
         }
       }
     } catch (_) {}
+    _fetching = false;
     if (!_initialLoadDone) _initialLoadDone = true;
   }
 
@@ -260,6 +284,7 @@ class _ConversationScreenState extends State<ConversationScreen>
 
     final combined = _draftBatch.join('\n\n\n');
     final secret = await _loadSecret();
+    final batchClientId = _generateUuid();
 
     try {
       final resp = await http.post(
@@ -268,7 +293,7 @@ class _ConversationScreenState extends State<ConversationScreen>
           'Content-Type': 'application/json',
           if (secret.isNotEmpty) 'x-dispatch-token': secret,
         },
-        body: jsonEncode({'message': combined, 'source': 'pulse-draft-batch'}),
+        body: jsonEncode({'message': combined, 'source': 'pulse-draft-batch', 'client_id': batchClientId}),
       ).timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
@@ -276,21 +301,15 @@ class _ConversationScreenState extends State<ConversationScreen>
         // Show each draft as a "sent" message in the thread (optimistic)
         final now = DateTime.now().toUtc().toIso8601String();
         final sentMessages = _draftBatch
-            .asMap()
-            .entries
-            .map((e) => _Message(
+            .map((text) => _Message(
                   from: 'mike',
                   ts: now,
-                  body: e.value,
+                  body: text,
                   source: 'pulse-draft-batch',
                 ))
             .toList();
-        // Register individual drafts and combined text so echoes are suppressed.
-        final echoExpiry = DateTime.now().add(const Duration(seconds: 60));
-        for (final draft in _draftBatch) {
-          _pendingEchoes[draft] = echoExpiry;
-        }
-        _pendingEchoes[combined] = echoExpiry;
+        // Register batch clientId (null = swallow echo without replacing optimistic bubbles)
+        _pendingClientIds[batchClientId] = null;
         setState(() {
           _messages = [..._messages, ...sentMessages];
           _lastTs = now;
@@ -313,25 +332,48 @@ class _ConversationScreenState extends State<ConversationScreen>
   Future<void> _sendNow() async {
     if (_sending) return;
     final text = _inputController.text.trim();
-    if (text.isEmpty) return;
+    final image = _pendingImage;
+    if (text.isEmpty && image == null) return;
     setState(() => _sending = true);
+
+    String? imageData;
+    String? imageMediaType;
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      imageData = base64Encode(bytes);
+      imageMediaType = _mimeFromPath(image.path);
+    }
+
     final optimisticTs = DateTime.now().toUtc().toIso8601String();
-    final optimistic = _Message(from: 'mike', ts: optimisticTs, body: text, source: 'pulse-quickcapture');
-    // Register so the server echo is suppressed when the next poll returns it.
-    _pendingEchoes[text] = DateTime.now().add(const Duration(seconds: 60));
+    final clientId = _generateUuid();
+    final optimistic = _Message(
+      from: 'mike',
+      ts: optimisticTs,
+      body: text,
+      source: 'pulse-quickcapture',
+      imageData: imageData,
+      imageMediaType: imageMediaType,
+      clientId: clientId,
+    );
+    _pendingClientIds[clientId] = optimistic;
     setState(() {
       _messages = [..._messages, optimistic];
       _lastTs = optimisticTs;
+      _pendingImage = null;
     });
     _inputController.clear();
     _scrollToBottom(force: true);
+
+    final payload = <String, dynamic>{'client_id': clientId};
+    if (text.isNotEmpty) payload['text'] = text;
+    if (imageData != null) payload['image'] = {'data': imageData, 'mediaType': imageMediaType};
 
     try {
       final resp = await http.post(
         Uri.parse('$_base/pulse/capture'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'text': text}),
-      ).timeout(const Duration(seconds: 5));
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (resp.statusCode == 200) {
         setState(() => _sendSuccess = true);
@@ -347,10 +389,59 @@ class _ConversationScreenState extends State<ConversationScreen>
     }
   }
 
+  String _generateUuid() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
   Future<String> _loadSecret() async {
     // Try to load relay secret from ~/.dispatch/relay.secret
     // On web, we can't read the filesystem; skip the token (localhost-only anyway)
     return '';
+  }
+
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Photo library'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    final file = await _imagePicker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1920,
+    );
+    if (file != null && mounted) {
+      setState(() => _pendingImage = file);
+    }
+  }
+
+  String _mimeFromPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
   }
 
   void _showError(String msg) {
@@ -444,6 +535,20 @@ class _ConversationScreenState extends State<ConversationScreen>
                     ),
                   ),
                 ),
+              // ── Scroll-to-bottom FAB — shown whenever not at bottom ──
+              if (_showScrollFab)
+                Positioned(
+                  bottom: 8,
+                  right: 16,
+                  child: FloatingActionButton.small(
+                    onPressed: _jumpToBottom,
+                    tooltip: 'Scroll to latest',
+                    backgroundColor: theme.colorScheme.surface,
+                    foregroundColor: theme.colorScheme.onSurface,
+                    elevation: 3,
+                    child: const Icon(Icons.keyboard_arrow_down, size: 22),
+                  ),
+                ),
             ],
           ),
         ),
@@ -455,9 +560,12 @@ class _ConversationScreenState extends State<ConversationScreen>
           flushing: _flushing,
           success: _sendSuccess,
           hasDrafts: _draftBatch.isNotEmpty,
+          pendingImage: _pendingImage,
           onLocalSend: _localSend,
           onSendToDee: _flushBatch,
           onSendNow: _sendNow,
+          onAttachImage: _pickImage,
+          onRemoveImage: () => setState(() => _pendingImage = null),
         ),
       ],
     );
@@ -472,6 +580,9 @@ class _Message {
   final String body;
   final String? source;
   final String? inReplyTo;
+  final String? imageData;
+  final String? imageMediaType;
+  final String? clientId;
 
   const _Message({
     required this.from,
@@ -479,15 +590,24 @@ class _Message {
     required this.body,
     this.source,
     this.inReplyTo,
+    this.imageData,
+    this.imageMediaType,
+    this.clientId,
   });
 
-  factory _Message.fromJson(Map<String, dynamic> j) => _Message(
-        from: (j['from'] as String?) ?? 'mike',
-        ts: (j['ts'] as String?) ?? '',
-        body: (j['body'] as String?) ?? '',
-        source: j['source'] as String?,
-        inReplyTo: j['in_reply_to'] as String?,
-      );
+  factory _Message.fromJson(Map<String, dynamic> j) {
+    final img = j['image'] as Map<String, dynamic>?;
+    return _Message(
+      from: (j['from'] as String?) ?? 'mike',
+      ts: (j['ts'] as String?) ?? '',
+      body: (j['body'] as String?) ?? '',
+      source: j['source'] as String?,
+      inReplyTo: j['in_reply_to'] as String?,
+      imageData: img?['data'] as String?,
+      imageMediaType: img?['mediaType'] as String?,
+      clientId: j['client_id'] as String?,
+    );
+  }
 }
 
 // ── Draft bubble ─────────────────────────────────────────────────────────────
@@ -526,7 +646,7 @@ class _DraftBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(text,
+                  SelectableText(text,
                       style: TextStyle(
                           fontSize: 14,
                           color: theme.colorScheme.onSurface.withOpacity(0.7))),
@@ -682,31 +802,45 @@ class _MessageBubble extends StatelessWidget {
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: [
-                  isMike
-                      ? Text(msg.body,
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: theme.colorScheme.onPrimary))
-                      : MarkdownBody(
-                          data: msg.body,
-                          styleSheet: MarkdownStyleSheet(
-                            p: TextStyle(
+                  if (msg.imageData != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        base64Decode(msg.imageData!),
+                        width: 220,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                    if (msg.body.isNotEmpty) const SizedBox(height: 6),
+                  ],
+                  if (msg.body.isNotEmpty)
+                    isMike
+                        ? SelectableText(msg.body,
+                            style: TextStyle(
                                 fontSize: 14,
-                                color: theme.colorScheme.onSurfaceVariant),
-                            code: TextStyle(
-                                fontSize: 12,
-                                backgroundColor: theme.colorScheme.surface,
-                                color: theme.colorScheme.onSurface),
+                                color: theme.colorScheme.onPrimary))
+                        : MarkdownBody(
+                            data: msg.body,
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: TextStyle(
+                                  fontSize: 14,
+                                  color: theme.colorScheme.onSurfaceVariant),
+                              code: TextStyle(
+                                  fontSize: 12,
+                                  backgroundColor: theme.colorScheme.surface,
+                                  color: theme.colorScheme.onSurface),
+                            ),
+                            onTapLink: (text, href, title) {
+                              if (href != null) {
+                                launchUrl(
+                                  Uri.parse(href),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            },
                           ),
-                          onTapLink: (text, href, title) {
-                            if (href != null) {
-                              launchUrl(
-                                Uri.parse(href),
-                                mode: LaunchMode.externalApplication,
-                              );
-                            }
-                          },
-                        ),
                   const SizedBox(height: 4),
                   Text(
                     ts,
@@ -793,9 +927,12 @@ class _InputBar extends StatelessWidget {
   final bool flushing;
   final bool success;
   final bool hasDrafts;
+  final XFile? pendingImage;
   final VoidCallback onLocalSend;
   final VoidCallback onSendToDee;
   final VoidCallback onSendNow;
+  final VoidCallback onAttachImage;
+  final VoidCallback onRemoveImage;
 
   const _InputBar({
     required this.controller,
@@ -806,6 +943,9 @@ class _InputBar extends StatelessWidget {
     required this.onLocalSend,
     required this.onSendToDee,
     required this.onSendNow,
+    required this.onAttachImage,
+    required this.onRemoveImage,
+    this.pendingImage,
   });
 
   @override
@@ -820,16 +960,63 @@ class _InputBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Image preview strip
+          if (pendingImage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(pendingImage!.path),
+                      height: 80,
+                      width: 80,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: GestureDetector(
+                      onTap: onRemoveImage,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.errorContainer,
+                        ),
+                        child: Icon(Icons.close, size: 12, color: theme.colorScheme.error),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
+              // Attach image button
+              GestureDetector(
+                onTap: onAttachImage,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    Icons.attach_file,
+                    size: 20,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ),
               Expanded(
                 child: TextField(
                   controller: controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Message Dee…',
+                  decoration: InputDecoration(
+                    hintText: pendingImage != null ? 'Add a caption…' : 'Message Dee…',
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   style: const TextStyle(fontSize: 14),
                   enabled: !sending && !flushing,
@@ -844,7 +1031,7 @@ class _InputBar extends StatelessWidget {
                 flushing: flushing,
                 success: success,
                 onSendNow: onSendNow,
-                onLocalSend: onLocalSend,
+                onLocalSend: pendingImage != null ? onSendNow : onLocalSend,
               ),
             ],
           ),
