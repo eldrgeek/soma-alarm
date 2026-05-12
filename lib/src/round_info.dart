@@ -1,10 +1,11 @@
 // Hand-maintained per round. Bump when starting a new round.
 // Convention: round number + 1-line title, then a longer description.
 
-const int kRoundNumber = 8;
-const String kRoundTitle = 'r8 scaffold — reminders + health screens';
+const int kRoundNumber = 9;
+const String kRoundTitle = 'r9 — in-app OTA update flow';
 const String kRoundDescription = '''
-r8 — Stub screens landed: Reminders tab + Personal Health screen added to bottom nav.
-Builds on r7 (visible version chip, About page).
-This round: nav cleanup, double-send guard, Dee-reply notification channel, version chip now shows r8.
+r9 — In-app OTA update flow. About page checks Tailscale OTA server on open,
+shows "Update available" with one-tap install. VersionChip shows ⬆ badge when
+update is ready. publish-ota.sh automates APK build → server publish.
+Builds on r8 (reminders + personal health tabs).
 ''';

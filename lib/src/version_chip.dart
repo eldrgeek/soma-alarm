@@ -1,16 +1,16 @@
 // Visible build-version chip for the WebShell.
 //
-// Renders: vX.Y.Z+B · <shortSha>
+// Renders: vX.Y.Z+B · <shortSha>  [⬆ if update available]
 // Tap → opens AboutPage as an inline drill-down (push on the same Navigator).
 // SelectableText so Mike can copy values without leaving the chip.
-//
-// Drop this into lib/src/version_chip.dart and import from web_shell.dart.
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import 'build_info.dart';
 import 'about_page.dart';
+import 'build_info.dart';
+import 'ota_service.dart';
 
 class VersionChip extends StatefulWidget {
   /// If [compact] is true, only shows "vX.Y.Z+B".
@@ -25,6 +25,7 @@ class VersionChip extends StatefulWidget {
 class _VersionChipState extends State<VersionChip> {
   String? _version;
   String? _build;
+  bool _updateAvailable = false;
 
   @override
   void initState() {
@@ -39,6 +40,18 @@ class _VersionChipState extends State<VersionChip> {
       _version = info.version;
       _build = info.buildNumber;
     });
+    if (!kIsWeb) _checkUpdateBadge(info);
+  }
+
+  Future<void> _checkUpdateBadge(PackageInfo info) async {
+    // Use cached result if fresh; otherwise do a background check.
+    final cache = OtaUpdateCache.instance;
+    if (!cache.isStale && cache.updateAvailable != null) {
+      if (mounted) setState(() => _updateAvailable = cache.updateAvailable!);
+      return;
+    }
+    final available = await OtaService.instance.checkForUpdate();
+    if (mounted) setState(() => _updateAvailable = available);
   }
 
   @override
@@ -59,14 +72,23 @@ class _VersionChipState extends State<VersionChip> {
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 11,
-              color: Theme.of(context).hintColor,
-              letterSpacing: 0.2,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  color: Theme.of(context).hintColor,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              if (_updateAvailable) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_circle_up, size: 13, color: Colors.orange),
+              ],
+            ],
           ),
         ),
       ),

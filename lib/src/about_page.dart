@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'build_info.dart';
+import 'ota_service.dart';
 import 'round_info.dart';
 import 'settings.dart';
 
@@ -17,11 +18,19 @@ class AboutPage extends StatefulWidget {
   State<AboutPage> createState() => _AboutPageState();
 }
 
+enum _OtaState { checking, upToDate, available, downloading, error }
+
 class _AboutPageState extends State<AboutPage> {
   PackageInfo? _pkg;
   String _host = '…';
   String _tailscale = 'checking…';
   String _roundNotes = '';
+
+  // OTA
+  _OtaState _otaState = _OtaState.checking;
+  OtaManifest? _manifest;
+  double _downloadProgress = 0;
+  String _otaError = '';
 
   @override
   void initState() {
@@ -40,9 +49,51 @@ class _AboutPageState extends State<AboutPage> {
       _tailscale = ts;
       _roundNotes = kRoundDescription.trim();
     });
+    if (!kIsWeb) _checkOta(pkg);
   }
 
-  // Classify the configured Yeshie host without any platform-specific imports.
+  Future<void> _checkOta(PackageInfo pkg) async {
+    setState(() => _otaState = _OtaState.checking);
+    final manifest = await OtaService.instance.fetchLatest();
+    if (!mounted) return;
+    if (manifest == null) {
+      setState(() {
+        _otaState = _OtaState.error;
+        _otaError = 'Could not reach OTA server';
+      });
+      return;
+    }
+    final currentBuild = int.tryParse(pkg.buildNumber) ?? 0;
+    final available = OtaService.instance.isUpdateAvailable(manifest, currentBuild);
+    // Update cache so VersionChip badge reflects this check.
+    OtaUpdateCache.instance.set(manifest, available);
+    setState(() {
+      _manifest = manifest;
+      _otaState = available ? _OtaState.available : _OtaState.upToDate;
+    });
+  }
+
+  Future<void> _installUpdate() async {
+    final m = _manifest;
+    if (m == null) return;
+    setState(() {
+      _otaState = _OtaState.downloading;
+      _downloadProgress = 0;
+    });
+    try {
+      final path = await OtaService.instance.downloadApk(m, (p) {
+        if (mounted) setState(() => _downloadProgress = p);
+      });
+      await OtaService.instance.launchInstaller(path);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otaState = _OtaState.error;
+        _otaError = e.toString();
+      });
+    }
+  }
+
   String _classifyHost(String host) {
     if (host.isEmpty) return 'host not configured';
     final uri = Uri.tryParse(host);
@@ -77,6 +128,10 @@ class _AboutPageState extends State<AboutPage> {
           _row('Tailscale', _tailscale),
           _row('Platform', kIsWeb ? 'web' : 'mobile'),
           const SizedBox(height: 16),
+          if (!kIsWeb) ...[
+            _buildOtaSection(context),
+            const SizedBox(height: 16),
+          ],
           Text("What's new in this round",
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
@@ -87,6 +142,103 @@ class _AboutPageState extends State<AboutPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildOtaSection(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Software update',
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            _buildOtaBody(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOtaBody(BuildContext context) {
+    switch (_otaState) {
+      case _OtaState.checking:
+        return const Row(children: [
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 8),
+          Text('Checking for updates…'),
+        ]);
+
+      case _OtaState.upToDate:
+        final pkg = _pkg;
+        return Row(children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 18),
+          const SizedBox(width: 8),
+          Text('Pulse is up to date (${pkg != null ? 'v${pkg.version}+${pkg.buildNumber}' : 'current version'})'),
+        ]);
+
+      case _OtaState.available:
+        final m = _manifest!;
+        final pkg = _pkg;
+        final from = pkg != null ? 'v${pkg.version}+${pkg.buildNumber}' : 'current';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.system_update, color: Colors.orange, size: 18),
+              const SizedBox(width: 8),
+              Text('Update available: $from → v${m.versionName}+${m.buildNumber}'),
+            ]),
+            if (m.releaseNotes.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(m.releaseNotes,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).hintColor)),
+            ],
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _installUpdate,
+              icon: const Icon(Icons.download),
+              label: const Text('Install update'),
+            ),
+          ],
+        );
+
+      case _OtaState.downloading:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Downloading… ${(_downloadProgress * 100).toStringAsFixed(0)}%'),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(value: _downloadProgress),
+            const SizedBox(height: 4),
+            Text('SHA-256 will be verified before install.',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+        );
+
+      case _OtaState.error:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_otaError)),
+            ]),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => _pkg != null ? _checkOta(_pkg!) : null,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        );
+    }
   }
 
   Widget _row(String label, String value) {
