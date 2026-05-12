@@ -132,11 +132,11 @@ class _HealthScreenState extends State<HealthScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
+                SelectableText(
                   'Fail streak: $failStreak',
                   style: theme.textTheme.bodySmall,
                 ),
-                Text(tsLocal, style: theme.textTheme.bodySmall),
+                SelectableText(tsLocal, style: theme.textTheme.bodySmall),
               ],
             ),
           ),
@@ -212,7 +212,7 @@ class _ServicePill extends StatelessWidget {
               fontSize: 13,
             ),
           ),
-          subtitle: Text(
+          subtitle: SelectableText(
             msg,
             style: TextStyle(
               color: color.withOpacity(0.85),

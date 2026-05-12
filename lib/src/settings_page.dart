@@ -142,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
           Text('Pulse / Yeshie relay',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text(
+          SelectableText(
             'Host the Conversation tab polls for messages.\n'
             'Web default: localhost:3333  •  Mobile default: Tailscale 100.72.65.118:3333',
             style: Theme.of(context)

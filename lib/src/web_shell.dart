@@ -5,12 +5,14 @@ import 'package:http/http.dart' as http;
 
 import 'settings.dart';
 import 'activity_screen.dart';
-import 'campus_screen.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
 import 'jobs_screen.dart';
-import 'putoff_screen.dart';
+import 'reminders_screen.dart';
 import 'version_chip.dart';
+
+// Putoff items are re-homed to Reminders (category: self_deferred) via Track A.
+// PutoffScreen and CampusScreen remain as files but are no longer in the main nav.
 
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
@@ -20,12 +22,10 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex = 0; // 0=Conversation 1=Jobs 2=Activity 3=Putoff 4=Health 5=Campus
+  int _selectedIndex = 0; // 0=Pulse 1=Jobs 2=Activity 3=Reminders 4=Health
 
   @override
   Widget build(BuildContext context) {
-    final isNarrow = MediaQuery.of(context).size.width < 600;
-
     final screenStack = IndexedStack(
       index: _selectedIndex,
       children: [
@@ -35,112 +35,47 @@ class _WebShellState extends State<WebShell> {
         ),
         const JobsScreen(),
         const ActivityScreen(),
-        const PutoffScreen(),
+        const RemindersScreen(),
         const HealthScreen(),
-        const CampusScreen(),
       ],
     );
 
-    if (isNarrow) {
-      return Scaffold(
-        body: Stack(
-          children: [
-            screenStack,
-            const Positioned(right: 8, bottom: 64, child: VersionChip()),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _selectedIndex,
-          onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline),
-              selectedIcon: Icon(Icons.chat_bubble),
-              label: 'Pulse',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.work_outline),
-              selectedIcon: Icon(Icons.work),
-              label: 'Jobs',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.dynamic_feed_outlined),
-              selectedIcon: Icon(Icons.dynamic_feed),
-              label: 'Activity',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.pause_circle_outline),
-              selectedIcon: Icon(Icons.pause_circle),
-              label: 'Putoff',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.monitor_heart_outlined),
-              selectedIcon: Icon(Icons.monitor_heart),
-              label: 'Health',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Campus',
-            ),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
-      body: Row(
+      body: Stack(
         children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.chat_bubble_outline),
-                selectedIcon: Icon(Icons.chat_bubble),
-                label: Text('Pulse'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.work_outline),
-                selectedIcon: Icon(Icons.work),
-                label: Text('Jobs'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.dynamic_feed_outlined),
-                selectedIcon: Icon(Icons.dynamic_feed),
-                label: Text('Activity'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.pause_circle_outline),
-                selectedIcon: Icon(Icons.pause_circle),
-                label: Text('Putoff'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.monitor_heart_outlined),
-                selectedIcon: Icon(Icons.monitor_heart),
-                label: Text('Health'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.explore_outlined),
-                selectedIcon: Icon(Icons.explore),
-                label: Text('Campus'),
-              ),
-            ],
+          screenStack,
+          const Positioned(right: 8, bottom: 64, child: VersionChip()),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Pulse',
           ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: Stack(
-              children: [
-                screenStack,
-                const Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: VersionChip(),
-                ),
-              ],
-            ),
+          NavigationDestination(
+            icon: Icon(Icons.work_outline),
+            selectedIcon: Icon(Icons.work),
+            label: 'Jobs',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.dynamic_feed_outlined),
+            selectedIcon: Icon(Icons.dynamic_feed),
+            label: 'Activity',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'Reminders',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.monitor_heart_outlined),
+            selectedIcon: Icon(Icons.monitor_heart),
+            label: 'Health',
           ),
         ],
       ),

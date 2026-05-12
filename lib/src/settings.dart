@@ -12,6 +12,8 @@ class Settings {
   static const _kLeadMinutes = 'lead_minutes';
   static const _kYeshieHost = 'yeshie_host';
   static const _kDraftBatch = 'draft_batch_v1';
+  static const _kGitHubToken = 'github_token';
+  static const _kGitHubRepos = 'github_repos';
 
   static const defaultWebhook =
       'https://vpsmikewolf.duckdns.org/soma/v1/alarm-event';
@@ -87,6 +89,34 @@ class Settings {
   }
 
   // Draft batch: persisted as JSON-encoded list of strings.
+  static const _defaultGitHubRepos = ['mikewolf/soma-alarm'];
+
+  static Future<String?> githubToken() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kGitHubToken);
+  }
+
+  static Future<void> setGitHubToken(String token) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kGitHubToken, token);
+  }
+
+  static Future<List<String>> githubRepos() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_kGitHubRepos);
+    if (raw == null || raw.isEmpty) return _defaultGitHubRepos;
+    try {
+      return (jsonDecode(raw) as List<dynamic>).cast<String>();
+    } catch (_) {
+      return _defaultGitHubRepos;
+    }
+  }
+
+  static Future<void> setGitHubRepos(List<String> repos) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kGitHubRepos, jsonEncode(repos));
+  }
+
   static Future<List<String>> draftBatch() async {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_kDraftBatch);

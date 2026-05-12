@@ -131,12 +131,12 @@ class _PutoffScreenState extends State<PutoffScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (addedTs != null)
-              Text('Added: $addedTs',
+              SelectableText('Added: $addedTs',
                   style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 16),
             _Section(
               label: 'Original request',
-              child: Text(rawInput,
+              child: SelectableText(rawInput,
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
             ),
             if (blockedOn.isNotEmpty) ...[
@@ -154,7 +154,7 @@ class _PutoffScreenState extends State<PutoffScreen> {
                                 const Text('• ',
                                     style:
                                         TextStyle(color: Colors.orange)),
-                                Expanded(child: Text(b)),
+                                Expanded(child: SelectableText(b)),
                               ],
                             ),
                           ))
@@ -166,7 +166,7 @@ class _PutoffScreenState extends State<PutoffScreen> {
               const SizedBox(height: 16),
               _Section(
                 label: 'Notes',
-                child: Text(notes,
+                child: SelectableText(notes,
                     style:
                         const TextStyle(fontSize: 13, color: Colors.grey)),
               ),
