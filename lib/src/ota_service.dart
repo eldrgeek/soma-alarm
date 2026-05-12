@@ -124,21 +124,19 @@ class OtaService {
 
       final total = response.contentLength ?? m.size;
       final sink = dest.openWrite();
-      final digest = AccumulatorSink<Digest>();
-      final input = sha256.startChunkedConversion(digest);
+      final allBytes = <int>[];
 
       int received = 0;
       await response.stream.forEach((chunk) {
         sink.add(chunk);
-        input.add(chunk);
+        allBytes.addAll(chunk);
         received += chunk.length;
         if (total > 0) onProgress(received / total);
       });
-      input.close();
       await sink.flush();
       await sink.close();
 
-      final actualHash = digest.events.single.toString();
+      final actualHash = sha256.convert(allBytes).toString();
       if (actualHash != m.sha256) {
         await dest.delete();
         throw Exception(
