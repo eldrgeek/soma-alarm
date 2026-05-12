@@ -1,10 +1,10 @@
 // Hand-maintained per round. Bump when starting a new round.
 // Convention: round number + 1-line title, then a longer description.
 
-const int kRoundNumber = 7;
-const String kRoundTitle = 'host-config + kIsWeb-fix';
+const int kRoundNumber = 8;
+const String kRoundTitle = 'r8 scaffold — reminders + health screens';
 const String kRoundDescription = '''
-r7 — Visible version chip + About page.
-Builds on r6 (host-config plumbing, kIsWeb branching for web/mobile parity).
-This round: Mike and Claude always agree on what version is in front of Mike.
+r8 — Stub screens landed: Reminders tab + Personal Health screen added to bottom nav.
+Builds on r7 (visible version chip, About page).
+This round: nav cleanup, double-send guard, Dee-reply notification channel, version chip now shows r8.
 ''';

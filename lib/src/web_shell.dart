@@ -44,7 +44,7 @@ class _WebShellState extends State<WebShell> {
       body: Stack(
         children: [
           screenStack,
-          const Positioned(right: 8, bottom: 64, child: VersionChip()),
+          const Positioned(right: 8, top: 8, child: VersionChip()),
         ],
       ),
       bottomNavigationBar: NavigationBar(
