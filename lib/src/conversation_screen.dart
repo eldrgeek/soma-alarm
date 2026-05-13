@@ -21,10 +21,14 @@ class ConversationScreen extends StatefulWidget {
   /// so the shell can switch back to this tab.
   final VoidCallback? onRequestFocus;
 
+  /// Notifier from the shell's search icon; toggling opens/closes search.
+  final ValueNotifier<bool>? searchTrigger;
+
   const ConversationScreen({
     super.key,
     this.isActive = true,
     this.onRequestFocus,
+    this.searchTrigger,
   });
 
   @override
@@ -68,6 +72,14 @@ class _ConversationScreenState extends State<ConversationScreen>
   final _imagePicker = ImagePicker();
   XFile? _pendingImage;
 
+  // ── Search state ──────────────────────────────────────────────────────
+  bool _searchActive = false;
+  final _searchController = TextEditingController();
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchLoading = false;
+  Timer? _searchDebounce;
+  String? _highlightedTs;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +91,18 @@ class _ConversationScreenState extends State<ConversationScreen>
     _loadDraftBatch();
     _inputController.addListener(_onInputChanged);
     _scrollController.addListener(_onScroll);
+    widget.searchTrigger?.addListener(_onSearchTrigger);
+  }
+
+  void _onSearchTrigger() {
+    setState(() {
+      _searchActive = !_searchActive;
+      if (!_searchActive) {
+        _searchController.clear();
+        _searchResults = [];
+        _searchDebounce?.cancel();
+      }
+    });
   }
 
   Future<void> _loadHost() async {
@@ -137,8 +161,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   void dispose() {
     _pollTimer?.cancel();
     _idleTimer?.cancel();
+    _searchDebounce?.cancel();
     _scrollController.dispose();
     _inputController.dispose();
+    _searchController.dispose();
+    widget.searchTrigger?.removeListener(_onSearchTrigger);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -463,6 +490,60 @@ class _ConversationScreenState extends State<ConversationScreen>
     );
   }
 
+  void _onSearchQueryChanged(String q) {
+    _searchDebounce?.cancel();
+    if (q.trim().isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _runSearch(q.trim()));
+  }
+
+  Future<void> _runSearch(String q) async {
+    setState(() => _searchLoading = true);
+    try {
+      final uri = Uri.parse('$_base/conversation/search?q=${Uri.encodeQueryComponent(q)}');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (!mounted) return;
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final results = (data['results'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+        setState(() => _searchResults = results);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _searchResults = []);
+    } finally {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  void _onSearchResultTap(Map<String, dynamic> result) {
+    final ts = result['timestamp'] as String? ?? '';
+    setState(() {
+      _searchActive = false;
+      _searchController.clear();
+      _searchResults = [];
+      _highlightedTs = ts;
+    });
+
+    // Scroll to approximate position.
+    final idx = _messages.indexWhere((m) => m.ts == ts);
+    if (idx >= 0 && _scrollController.hasClients) {
+      final approx = (idx * 90.0).clamp(0.0, _scrollController.position.maxScrollExtent);
+      _scrollController.animateTo(
+        approx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
+    }
+
+    // Clear highlight after 2s.
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _highlightedTs = null);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -489,7 +570,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                       itemCount: _messages.length + _draftBatch.length,
                       itemBuilder: (ctx, i) {
                         if (i < _messages.length) {
-                          return _MessageBubble(msg: _messages[i]);
+                          return _MessageBubble(
+                            msg: _messages[i],
+                            highlighted: _messages[i].ts == _highlightedTs,
+                          );
                         }
                         final draftIndex = i - _messages.length;
                         return _DraftBubble(
@@ -498,6 +582,21 @@ class _ConversationScreenState extends State<ConversationScreen>
                         );
                       },
                     ),
+              // ── Search overlay ────────────────────────────────────────
+              if (_searchActive)
+                _SearchOverlay(
+                  controller: _searchController,
+                  results: _searchResults,
+                  loading: _searchLoading,
+                  onQueryChanged: _onSearchQueryChanged,
+                  onResultTap: _onSearchResultTap,
+                  onClose: () => setState(() {
+                    _searchActive = false;
+                    _searchController.clear();
+                    _searchResults = [];
+                    _searchDebounce?.cancel();
+                  }),
+                ),
               // ── ↓ N new pill — shown when scrolled up with arrivals ──
               if (_unreadCount > 0)
                 Positioned(
@@ -754,7 +853,8 @@ class _IdleBanner extends StatelessWidget {
 
 class _MessageBubble extends StatelessWidget {
   final _Message msg;
-  const _MessageBubble({required this.msg});
+  final bool highlighted;
+  const _MessageBubble({required this.msg, this.highlighted = false});
 
   @override
   Widget build(BuildContext context) {
@@ -782,14 +882,20 @@ class _MessageBubble extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Flexible(
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
               constraints: const BoxConstraints(maxWidth: 480),
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMike
-                    ? theme.colorScheme.primary.withOpacity(0.85)
-                    : theme.colorScheme.surfaceVariant,
+                color: highlighted
+                    ? const Color(0xFFFFF59D)
+                    : isMike
+                        ? theme.colorScheme.primary.withOpacity(0.85)
+                        : theme.colorScheme.surfaceVariant,
+                border: highlighted
+                    ? Border.all(color: const Color(0xFFF9A825), width: 2)
+                    : null,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
@@ -819,7 +925,9 @@ class _MessageBubble extends StatelessWidget {
                         ? SelectableText(msg.body,
                             style: TextStyle(
                                 fontSize: 14,
-                                color: theme.colorScheme.onPrimary))
+                                color: highlighted
+                                    ? const Color(0xFF333333)
+                                    : theme.colorScheme.onPrimary))
                         : MarkdownBody(
                             data: msg.body,
                             selectable: true,
@@ -846,9 +954,11 @@ class _MessageBubble extends StatelessWidget {
                     ts,
                     style: TextStyle(
                         fontSize: 11,
-                        color: isMike
-                            ? theme.colorScheme.onPrimary.withOpacity(0.6)
-                            : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                        color: highlighted
+                            ? const Color(0xFF555555)
+                            : isMike
+                                ? theme.colorScheme.onPrimary.withOpacity(0.6)
+                                : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
                   ),
                 ],
               ),
@@ -1167,6 +1277,213 @@ class _SmallButton extends StatelessWidget {
               : theme.colorScheme.onSurfaceVariant,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Search overlay ────────────────────────────────────────────────────────────
+
+class _SearchOverlay extends StatelessWidget {
+  final TextEditingController controller;
+  final List<Map<String, dynamic>> results;
+  final bool loading;
+  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<Map<String, dynamic>> onResultTap;
+  final VoidCallback onClose;
+
+  const _SearchOverlay({
+    required this.controller,
+    required this.results,
+    required this.loading,
+    required this.onQueryChanged,
+    required this.onResultTap,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      elevation: 4,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Search input bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.search, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search your Pulse conversation…',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      style: const TextStyle(fontSize: 14),
+                      onChanged: onQueryChanged,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Close search',
+                    onPressed: onClose,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: theme.dividerColor),
+            // Results
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : results.isEmpty && controller.text.isNotEmpty
+                      ? Center(
+                          child: Text(
+                            'No results',
+                            style: TextStyle(color: theme.colorScheme.outline),
+                          ),
+                        )
+                      : results.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Search your Pulse conversation.',
+                                style: TextStyle(color: theme.colorScheme.outline),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: results.length,
+                              separatorBuilder: (_, __) =>
+                                  Divider(height: 1, color: theme.dividerColor),
+                              itemBuilder: (ctx, i) {
+                                final r = results[i];
+                                return _SearchResultTile(result: r, onTap: onResultTap);
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResultTile extends StatelessWidget {
+  final Map<String, dynamic> result;
+  final ValueChanged<Map<String, dynamic>> onTap;
+
+  const _SearchResultTile({required this.result, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final source = result['source'] as String? ?? 'mike';
+    final snippet = result['snippet'] as String? ?? '';
+    final matchIndices = result['match_indices'] as List<dynamic>?;
+    final ts = result['timestamp'] as String? ?? '';
+    final isMike = source == 'mike';
+    final label = isMike ? 'You' : 'Dee';
+    final labelColor = isMike ? theme.colorScheme.primary : theme.colorScheme.secondary;
+
+    // Format timestamp
+    String formattedTs = '';
+    try {
+      final dt = DateTime.parse(ts).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inSeconds < 60) {
+        formattedTs = 'just now';
+      } else if (diff.inMinutes < 60) {
+        formattedTs = '${diff.inMinutes}m ago';
+      } else if (diff.inHours < 24 && dt.day == now.day) {
+        formattedTs =
+            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } else {
+        formattedTs =
+            '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      }
+    } catch (_) {}
+
+    // Build snippet with highlighted match.
+    TextSpan snippetSpan;
+    if (matchIndices != null && matchIndices.length == 2) {
+      final start = (matchIndices[0] as num).toInt().clamp(0, snippet.length);
+      final end = (matchIndices[1] as num).toInt().clamp(start, snippet.length);
+      snippetSpan = TextSpan(
+        children: [
+          if (start > 0) TextSpan(text: snippet.substring(0, start)),
+          TextSpan(
+            text: snippet.substring(start, end),
+            style: const TextStyle(
+              backgroundColor: Color(0xFFFFF59D),
+              color: Color(0xFF333333),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (end < snippet.length) TextSpan(text: snippet.substring(end)),
+        ],
+        style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+      );
+    } else {
+      snippetSpan = TextSpan(
+        text: snippet,
+        style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+      );
+    }
+
+    return InkWell(
+      onTap: () => onTap(result),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: labelColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: labelColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  formattedTs,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            RichText(
+              text: snippetSpan,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );

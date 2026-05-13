@@ -24,6 +24,13 @@ class WebShell extends StatefulWidget {
 
 class _WebShellState extends State<WebShell> {
   int _selectedIndex = 0; // 0=Pulse 1=Jobs 2=Activity 3=Reminders 4=Health
+  final _searchTrigger = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _searchTrigger.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +40,7 @@ class _WebShellState extends State<WebShell> {
         ConversationScreen(
           isActive: _selectedIndex == 0,
           onRequestFocus: () => setState(() => _selectedIndex = 0),
+          searchTrigger: _searchTrigger,
         ),
         const JobsScreen(),
         const ActivityScreen(),
@@ -57,6 +65,18 @@ class _WebShellState extends State<WebShell> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_selectedIndex == 0)
+                      SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: IconButton(
+                          icon: const Icon(Icons.search, size: 18),
+                          tooltip: 'Search conversation',
+                          onPressed: () {
+                            _searchTrigger.value = !_searchTrigger.value;
+                          },
+                        ),
+                      ),
                     const VersionChip(),
                     const SizedBox(width: 4),
                     SizedBox(
