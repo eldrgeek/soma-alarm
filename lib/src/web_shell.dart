@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'settings.dart';
+import 'about_page.dart';
 import 'activity_screen.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
@@ -44,7 +45,36 @@ class _WebShellState extends State<WebShell> {
       body: Stack(
         children: [
           screenStack,
-          const Positioned(right: 8, top: 8, child: VersionChip()),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              left: false,
+              right: false,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8, top: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const VersionChip(),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: IconButton(
+                        icon: const Icon(Icons.info_outline, size: 18),
+                        tooltip: 'About',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const AboutPage()),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

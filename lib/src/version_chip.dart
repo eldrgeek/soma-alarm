@@ -64,31 +64,45 @@ class _VersionChipState extends State<VersionChip> {
     return Semantics(
       label: 'App version $v build $b commit $sha. Tap for details.',
       button: true,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AboutPage()),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  color: Theme.of(context).hintColor,
-                  letterSpacing: 0.2,
-                ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AboutPage()),
+            );
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.85),
+              border: Border.all(
+                color: Theme.of(context).dividerColor,
+                width: 1,
               ),
-              if (_updateAvailable) ...[
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_circle_up, size: 13, color: Colors.orange),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: Theme.of(context).hintColor,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                if (_updateAvailable) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_circle_up, size: 13, color: Colors.orange),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
