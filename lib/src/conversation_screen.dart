@@ -68,6 +68,9 @@ class _ConversationScreenState extends State<ConversationScreen>
   Timer? _idleTimer;
   bool _flushing = false;
 
+  // ── Input draft persistence ───────────────────────────────────────────
+  Timer? _draftSaveDebounce;
+
   // ── Image attachment state ────────────────────────────────────────────
   final _imagePicker = ImagePicker();
   XFile? _pendingImage;
@@ -89,6 +92,7 @@ class _ConversationScreenState extends State<ConversationScreen>
       _fetchMessages();
     });
     _loadDraftBatch();
+    _loadDispatchInputDraft();
     _inputController.addListener(_onInputChanged);
     _scrollController.addListener(_onScroll);
     widget.searchTrigger?.addListener(_onSearchTrigger);
@@ -113,6 +117,15 @@ class _ConversationScreenState extends State<ConversationScreen>
   Future<void> _loadDraftBatch() async {
     final batch = await Settings.draftBatch();
     if (mounted) setState(() => _draftBatch = batch);
+  }
+
+  Future<void> _loadDispatchInputDraft() async {
+    final draft = await Settings.dispatchInputDraft();
+    if (draft.isNotEmpty && mounted) {
+      _inputController.text = draft;
+      _inputController.selection =
+          TextSelection.fromPosition(TextPosition(offset: draft.length));
+    }
   }
 
   bool get _isNearBottom {
@@ -141,8 +154,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   void _onInputChanged() {
-    // Reset idle timer whenever Mike types.
     _resetIdleTimer();
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 500), () {
+      Settings.saveDispatchInputDraft(_inputController.text);
+    });
   }
 
   void _resetIdleTimer() {
@@ -161,6 +177,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   void dispose() {
     _pollTimer?.cancel();
     _idleTimer?.cancel();
+    _draftSaveDebounce?.cancel();
     _searchDebounce?.cancel();
     _scrollController.dispose();
     _inputController.dispose();
@@ -284,6 +301,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     if (text.isEmpty) return;
     final newBatch = [..._draftBatch, text];
     _inputController.clear();
+    _draftSaveDebounce?.cancel();
+    Settings.saveDispatchInputDraft('');
     setState(() {
       _draftBatch = newBatch;
       _showIdleBanner = false;
@@ -389,6 +408,8 @@ class _ConversationScreenState extends State<ConversationScreen>
       _pendingImage = null;
     });
     _inputController.clear();
+    _draftSaveDebounce?.cancel();
+    Settings.saveDispatchInputDraft('');
     _scrollToBottom(force: true);
 
     final payload = <String, dynamic>{'client_id': clientId};

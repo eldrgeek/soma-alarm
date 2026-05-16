@@ -12,6 +12,7 @@ class Settings {
   static const _kLeadMinutes = 'lead_minutes';
   static const _kYeshieHost = 'yeshie_host';
   static const _kDraftBatch = 'draft_batch_v1';
+  static const _kDispatchInputDraft = 'dispatch_input_draft';
   static const _kGitHubToken = 'github_token';
   static const _kGitHubRepos = 'github_repos';
 
@@ -132,6 +133,20 @@ class Settings {
   static Future<void> saveDraftBatch(List<String> batch) async {
     final p = await SharedPreferences.getInstance();
     await p.setString(_kDraftBatch, jsonEncode(batch));
+  }
+
+  static Future<String> dispatchInputDraft() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kDispatchInputDraft) ?? '';
+  }
+
+  static Future<void> saveDispatchInputDraft(String text) async {
+    final p = await SharedPreferences.getInstance();
+    if (text.isEmpty) {
+      await p.remove(_kDispatchInputDraft);
+    } else {
+      await p.setString(_kDispatchInputDraft, text);
+    }
   }
 }
 

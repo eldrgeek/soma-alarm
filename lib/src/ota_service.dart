@@ -12,7 +12,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-const String _otaBase = 'http://100.72.65.118:8089';
+const String _otaBase = 'https://vpsmikewolf.duckdns.org/pulse-ota';
 const String _manifestUrl = '$_otaBase/latest.json';
 
 class OtaManifest {

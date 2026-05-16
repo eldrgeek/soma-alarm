@@ -108,7 +108,7 @@ cat > "$OTA_DIR/index.html" << EOF
   <div class="meta">Size: $(( SIZE / 1048576 )) MB</div>
   <div class="meta">SHA-256: $SHA</div>
   <p>$ROUND_NOTES</p>
-  <a class="dl" href="/pulse.apk">Download APK</a>
+  <a class="dl" href="pulse.apk">Download APK</a>
 </body>
 </html>
 EOF
