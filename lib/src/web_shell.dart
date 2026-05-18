@@ -9,6 +9,7 @@ import 'activity_screen.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
 import 'jobs_screen.dart';
+import 'kanban_screen.dart';
 import 'reminders_screen.dart';
 import 'version_chip.dart';
 
@@ -23,7 +24,7 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex = 0; // 0=Pulse 1=Jobs 2=Activity 3=Reminders 4=Health
+  int _selectedIndex = 0; // 0=Pulse 1=Jobs 2=Activity 3=Reminders 4=Health 5=Board
   final _searchTrigger = ValueNotifier<bool>(false);
 
   @override
@@ -46,6 +47,7 @@ class _WebShellState extends State<WebShell> {
         const ActivityScreen(),
         const RemindersScreen(),
         const HealthScreen(),
+        const KanbanScreen(),
       ],
     );
 
@@ -126,6 +128,11 @@ class _WebShellState extends State<WebShell> {
             icon: Icon(Icons.monitor_heart_outlined),
             selectedIcon: Icon(Icons.monitor_heart),
             label: 'Health',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.view_kanban_outlined),
+            selectedIcon: Icon(Icons.view_kanban),
+            label: 'Board',
           ),
         ],
       ),
