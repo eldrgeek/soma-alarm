@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'alarms.dart';
@@ -68,6 +69,12 @@ class _ConversationScreenState extends State<ConversationScreen>
   Timer? _idleTimer;
   bool _flushing = false;
 
+  // ── Scroll-on-send spacer ────────────────────────────────────────────
+  // Set to ~65 % of viewport height on send so the user bubble scrolls to
+  // the top of the viewport and the response streams in below it.
+  // Cleared (→ 0) when the first response chunk arrives.
+  double _bottomSpacer = 0.0;
+
   // ── Input draft persistence ───────────────────────────────────────────
   Timer? _draftSaveDebounce;
 
@@ -83,6 +90,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   Timer? _searchDebounce;
   String? _highlightedTs;
 
+  // ── Relay real-time: thinking indicator ──────────────────────────────
+  IO.Socket? _pulseSocket;
+  bool _showThinking = false;
+  DateTime? _thinkingStart;
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +102,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     _loadHost().then((_) {
       _startPolling(active: true);
       _fetchMessages();
+      _connectPulseSocket();
     });
     _loadDraftBatch();
     _loadDispatchInputDraft();
@@ -107,6 +120,29 @@ class _ConversationScreenState extends State<ConversationScreen>
         _searchDebounce?.cancel();
       }
     });
+  }
+
+  void _connectPulseSocket() {
+    _pulseSocket?.disconnect();
+    final wsBase = _base.replaceFirst(RegExp(r'^http'), 'ws');
+    _pulseSocket = IO.io(
+      wsBase,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .setAuth({'role': 'pulse'})
+          .build(),
+    );
+    _pulseSocket!.on('message', (data) {
+      if (!mounted) return;
+      if (data is Map && data['type'] == 'thinking') {
+        setState(() {
+          _showThinking = true;
+          _thinkingStart = DateTime.now();
+        });
+      }
+    });
+    _pulseSocket!.connect();
   }
 
   Future<void> _loadHost() async {
@@ -183,6 +219,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     _inputController.dispose();
     _searchController.dispose();
     widget.searchTrigger?.removeListener(_onSearchTrigger);
+    _pulseSocket?.disconnect();
+    _pulseSocket?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -257,6 +295,8 @@ class _ConversationScreenState extends State<ConversationScreen>
           }).toList();
 
           final isInitial = _lastTs == null;
+          final hadSpacer = _bottomSpacer > 0 && dedupedMsgs.isNotEmpty;
+          final deeArrived = dedupedMsgs.any((m) => m.from == 'dee');
           setState(() {
             for (final e in replacements.entries) {
               _messages[e.key] = e.value;
@@ -264,13 +304,23 @@ class _ConversationScreenState extends State<ConversationScreen>
             if (dedupedMsgs.isNotEmpty) {
               _messages = isInitial ? dedupedMsgs : [..._messages, ...dedupedMsgs];
             }
-            // Always advance _lastTs past received messages so we don't re-fetch them.
-            _lastTs = newMsgs.last.ts;
+            // FIX: duplicate-on-send — only advance _lastTs forward, never rewind.
+            // Rewinding can re-expose server echoes whose clientId was already removed
+            // from _pendingClientIds, causing them to appear as duplicate bubbles.
+            final newTs = newMsgs.last.ts;
+            if (_lastTs == null || newTs.compareTo(_lastTs!) > 0) _lastTs = newTs;
+            // Clear the send-spacer now that content is arriving.
+            if (hadSpacer) _bottomSpacer = 0;
+            // Dismiss thinking indicator when Dee's first chunk arrives.
+            if (deeArrived) { _showThinking = false; _thinkingStart = null; }
           });
 
           if (dedupedMsgs.isNotEmpty) {
-            if (isInitial || _isNearBottom) {
-              _scrollToBottom();
+            // FIX: scroll jump — use _showScrollFab (persistent user-scrolled-away
+            // state) rather than instantaneous _isNearBottom so a new Dee reply
+            // never jumps the view while the user is actively scrolling upward.
+            if (isInitial || !_showScrollFab || hadSpacer) {
+              _scrollToBottom(force: hadSpacer);
             } else {
               setState(() => _unreadCount += dedupedMsgs.length);
             }
@@ -295,6 +345,27 @@ class _ConversationScreenState extends State<ConversationScreen>
     });
   }
 
+  // Called immediately after the user submits a message. Sets a bottom spacer
+  // equal to 65 % of the viewport so that scrolling to maxScrollExtent places
+  // the user bubble near the top of the screen, leaving room for the response
+  // to stream in below it.
+  void _scrollOnSend() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final viewportH = _scrollController.position.viewportDimension;
+      setState(() => _bottomSpacer = viewportH * 0.65);
+      // Second callback: runs after the ListView rebuilds with the new spacer.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    });
+  }
+
   // ── Local Send: appends to draft batch, no network ───────────────────
   Future<void> _localSend() async {
     final text = _inputController.text.trim();
@@ -309,7 +380,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     });
     await Settings.saveDraftBatch(newBatch);
     _resetIdleTimer();
-    _scrollToBottom(force: true);
+    _scrollOnSend();
   }
 
   // ── Remove a draft from the batch ───────────────────────────────────
@@ -352,6 +423,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                   ts: now,
                   body: text,
                   source: 'pulse-draft-batch',
+                  sentLocally: true,
                 ))
             .toList();
         // Register batch clientId (null = swallow echo without replacing optimistic bubbles)
@@ -363,7 +435,7 @@ class _ConversationScreenState extends State<ConversationScreen>
         });
         await Settings.saveDraftBatch([]);
         _idleTimer?.cancel();
-        _scrollToBottom(force: true);
+        _scrollOnSend();
       } else {
         _showError('Send failed: HTTP ${resp.statusCode}');
       }
@@ -400,6 +472,7 @@ class _ConversationScreenState extends State<ConversationScreen>
       imageData: imageData,
       imageMediaType: imageMediaType,
       clientId: clientId,
+      sentLocally: true,
     );
     _pendingClientIds[clientId] = optimistic;
     setState(() {
@@ -410,7 +483,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     _inputController.clear();
     _draftSaveDebounce?.cancel();
     Settings.saveDispatchInputDraft('');
-    _scrollToBottom(force: true);
+    _scrollOnSend();
 
     final payload = <String, dynamic>{'client_id': clientId};
     if (text.isNotEmpty) payload['text'] = text;
@@ -588,7 +661,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                   : ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      itemCount: _messages.length + _draftBatch.length,
+                      itemCount: _messages.length + _draftBatch.length + (_showThinking ? 1 : 0) + 1,
                       itemBuilder: (ctx, i) {
                         if (i < _messages.length) {
                           return _MessageBubble(
@@ -597,10 +670,18 @@ class _ConversationScreenState extends State<ConversationScreen>
                           );
                         }
                         final draftIndex = i - _messages.length;
-                        return _DraftBubble(
-                          text: _draftBatch[draftIndex],
-                          onRemove: () => _removeDraft(draftIndex),
-                        );
+                        if (draftIndex < _draftBatch.length) {
+                          return _DraftBubble(
+                            text: _draftBatch[draftIndex],
+                            onRemove: () => _removeDraft(draftIndex),
+                          );
+                        }
+                        final postDraft = i - _messages.length - _draftBatch.length;
+                        if (_showThinking && postDraft == 0) {
+                          return _ThinkingBubble(since: _thinkingStart ?? DateTime.now());
+                        }
+                        // Bottom spacer: non-zero only during scroll-on-send.
+                        return SizedBox(height: _bottomSpacer);
                       },
                     ),
               // ── Search overlay ────────────────────────────────────────
@@ -703,6 +784,8 @@ class _Message {
   final String? imageData;
   final String? imageMediaType;
   final String? clientId;
+  // True for messages added optimistically by the client (not from server poll).
+  final bool sentLocally;
 
   const _Message({
     required this.from,
@@ -713,6 +796,7 @@ class _Message {
     this.imageData,
     this.imageMediaType,
     this.clientId,
+    this.sentLocally = false,
   });
 
   factory _Message.fromJson(Map<String, dynamic> j) {
@@ -949,9 +1033,10 @@ class _MessageBubble extends StatelessWidget {
                                 color: highlighted
                                     ? const Color(0xFF333333)
                                     : theme.colorScheme.onPrimary))
+                        // FIX: text selection — MarkdownBody selectable:true conflicts
+                        // with the outer SelectionArea; let SelectionArea own it.
                         : MarkdownBody(
                             data: msg.body,
-                            selectable: true,
                             styleSheet: MarkdownStyleSheet(
                               p: TextStyle(
                                   fontSize: 14,
@@ -971,15 +1056,30 @@ class _MessageBubble extends StatelessWidget {
                             },
                           ),
                   const SizedBox(height: 4),
-                  Text(
-                    ts,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: highlighted
-                            ? const Color(0xFF555555)
-                            : isMike
-                                ? theme.colorScheme.onPrimary.withOpacity(0.6)
-                                : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        ts,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: highlighted
+                                ? const Color(0xFF555555)
+                                : isMike
+                                    ? theme.colorScheme.onPrimary.withOpacity(0.6)
+                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                      ),
+                      if (isMike && msg.sentLocally) ...[  
+                        const SizedBox(width: 4),
+                        Text(
+                          '✓ Sent',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onPrimary.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -1017,6 +1117,87 @@ class _MessageBubble extends StatelessWidget {
     } catch (_) {
       return '';
     }
+  }
+}
+
+// ── Thinking bubble (animated relay-ACK indicator) ───────────────────────────
+
+class _ThinkingBubble extends StatefulWidget {
+  final DateTime since;
+  const _ThinkingBubble({required this.since});
+
+  @override
+  State<_ThinkingBubble> createState() => _ThinkingBubbleState();
+}
+
+class _ThinkingBubbleState extends State<_ThinkingBubble> {
+  late Timer _ticker;
+  int _elapsed = 0;
+  int _dot = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _elapsed = DateTime.now().difference(widget.since).inSeconds;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _elapsed = DateTime.now().difference(widget.since).inSeconds;
+          _dot = (_dot + 1) % 4;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dots = '.' * (_dot == 0 ? 1 : _dot);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: theme.colorScheme.secondary,
+            child: const Text('D',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(4),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Text(
+              'Dee · ${_elapsed}s$dots',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  fontStyle: FontStyle.italic),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1127,12 +1308,13 @@ class _InputBar extends StatelessWidget {
               ),
             ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               // Attach image button
               GestureDetector(
                 onTap: onAttachImage,
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 4),
+                  padding: const EdgeInsets.only(right: 4, bottom: 10),
                   child: Icon(
                     Icons.attach_file,
                     size: 20,
@@ -1140,20 +1322,36 @@ class _InputBar extends StatelessWidget {
                   ),
                 ),
               ),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: pendingImage != null ? 'Add a caption…' : 'Message Dee…',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  // FIX: down-arrow nav to About — absorb vertical arrow keys that
+                  // the TextField leaves unhandled (e.g. empty field on web/desktop)
+                  // so they cannot propagate to the Scaffold's focus traversal and
+                  // accidentally activate the About IconButton.
+                  child: Focus(
+                    onKeyEvent: (node, event) {
+                      if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+                          event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: TextField(
+                      controller: controller,
+                      decoration: InputDecoration(
+                        hintText: pendingImage != null ? 'Add a caption…' : 'Message Dee…',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      style: const TextStyle(fontSize: 14),
+                      enabled: !sending && !flushing,
+                      maxLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                    ),
                   ),
-                  style: const TextStyle(fontSize: 14),
-                  enabled: !sending && !flushing,
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
                 ),
               ),
               // Dual-mode send: tap = send to Dee, long-press = local draft
@@ -1235,7 +1433,10 @@ class _DualSendButtonState extends State<_DualSendButton> {
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
-              : GestureDetector(
+              // FIX: send-arrow collision — enforce 44dp minimum tap target
+              : ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  child: GestureDetector(
                   key: const ValueKey('send-now'),
                   onTap: widget.onSendNow,
                   onLongPress: _onLongPress,
@@ -1243,7 +1444,7 @@ class _DualSendButtonState extends State<_DualSendButton> {
                   onLongPressEnd: (_) => setState(() => _pressing = false),
                   onLongPressCancel: () => setState(() => _pressing = false),
                   child: Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(12),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       decoration: BoxDecoration(
@@ -1261,6 +1462,7 @@ class _DualSendButtonState extends State<_DualSendButton> {
                       ),
                     ),
                   ),
+                ),
                 ),
     );
   }
