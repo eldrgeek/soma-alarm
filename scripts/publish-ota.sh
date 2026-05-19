@@ -13,8 +13,13 @@ APK_SRC="$REPO_ROOT/build/app/outputs/flutter-apk/app-release.apk"
 APK_DEST="$OTA_DIR/pulse.apk"
 
 SKIP_BUILD=false
+RUN_TESTS=false
+TEST_BACKEND="all"
 for arg in "$@"; do
   [[ "$arg" == "--skip-build" ]] && SKIP_BUILD=true
+  [[ "$arg" == "--test" ]] && RUN_TESTS=true
+  [[ "$arg" == "--test-backend=android" ]] && TEST_BACKEND="android"
+  [[ "$arg" == "--test-backend=web" ]]     && TEST_BACKEND="web"
 done
 
 mkdir -p "$OTA_DIR"
@@ -116,3 +121,14 @@ echo "==> Wrote $OTA_DIR/index.html"
 echo ""
 echo "Done. OTA server should serve the new build immediately."
 echo "Device can self-update via About → Install update."
+
+if [[ "$RUN_TESTS" == true ]]; then
+  RSI_RUNNER="$HOME/Projects/SOMA/tools/pulse-rsi/run_all.py"
+  if [[ ! -f "$RSI_RUNNER" ]]; then
+    echo "WARNING: RSI runner not found at $RSI_RUNNER — skipping tests." >&2
+  else
+    echo ""
+    echo "==> Running RSI test suite (--backend $TEST_BACKEND)…"
+    python3 "$RSI_RUNNER" --backend "$TEST_BACKEND" --version "$VERSION" || true
+  fi
+fi
