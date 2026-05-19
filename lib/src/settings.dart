@@ -148,6 +148,23 @@ class Settings {
       await p.setString(_kDispatchInputDraft, text);
     }
   }
+
+  static String _kanbanReplyKey(String projectName) =>
+      'kanban_reply_${projectName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+
+  static Future<String> kanbanReplyDraft(String projectName) async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kanbanReplyKey(projectName)) ?? '';
+  }
+
+  static Future<void> saveKanbanReplyDraft(String projectName, String text) async {
+    final p = await SharedPreferences.getInstance();
+    if (text.isEmpty) {
+      await p.remove(_kanbanReplyKey(projectName));
+    } else {
+      await p.setString(_kanbanReplyKey(projectName), text);
+    }
+  }
 }
 
 class TimeOfDayLite {
