@@ -65,6 +65,14 @@ Future<bool> runBackgroundPoll() async {
     } else {
       await AlarmService.instance.cancelMorningAlarm();
     }
+    final eveningOn = await Settings.eveningEnabled();
+    if (eveningOn) {
+      final t = await Settings.eveningTime();
+      await AlarmService.instance
+          .scheduleEveningAlarm(hour: t.hour, minute: t.minute);
+    } else {
+      await AlarmService.instance.cancelEveningAlarm();
+    }
     debugPrint('SOMA: poll complete');
     return true;
   } catch (e, st) {

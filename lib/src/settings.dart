@@ -9,6 +9,9 @@ class Settings {
   static const _kMorningEnabled = 'morning_enabled';
   static const _kMorningHour = 'morning_hour';
   static const _kMorningMinute = 'morning_minute';
+  static const _kEveningEnabled = 'evening_enabled';
+  static const _kEveningHour = 'evening_hour';
+  static const _kEveningMinute = 'evening_minute';
   static const _kLeadMinutes = 'lead_minutes';
   static const _kYeshieHost = 'yeshie_host';
   static const _kDraftBatch = 'draft_batch_v1';
@@ -77,6 +80,30 @@ class Settings {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_kMorningHour, hour);
     await p.setInt(_kMorningMinute, minute);
+  }
+
+  static Future<bool> eveningEnabled() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_kEveningEnabled) ?? true;
+  }
+
+  static Future<void> setEveningEnabled(bool v) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_kEveningEnabled, v);
+  }
+
+  static Future<TimeOfDayLite> eveningTime() async {
+    final p = await SharedPreferences.getInstance();
+    return TimeOfDayLite(
+      p.getInt(_kEveningHour) ?? 21,
+      p.getInt(_kEveningMinute) ?? 0,
+    );
+  }
+
+  static Future<void> setEveningTime(int hour, int minute) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kEveningHour, hour);
+    await p.setInt(_kEveningMinute, minute);
   }
 
   static Future<int> leadMinutes() async {

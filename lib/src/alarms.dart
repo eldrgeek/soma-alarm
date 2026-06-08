@@ -12,6 +12,7 @@ import 'webhook.dart';
 
 const String kEventChannel = 'soma_event_alarms_v2';
 const String kMorningChannel = 'soma_morning_alarm_v2';
+const String kEveningChannel = 'soma_evening_alarm_v1';
 const String kDeeRepliesChannel = 'dee-replies';
 const String _kOldEventChannel = 'soma_event_alarms';
 const String _kOldMorningChannel = 'soma_morning_alarm';
@@ -22,6 +23,7 @@ const String kActionSnooze15 = 'snooze15';
 const String kActionDismiss = 'dismiss';
 const String kActionFire = 'fire';
 const String kActionMorning = 'morning';
+const String kActionEvening = 'evening';
 
 class AlarmRecord {
   final String eventId;
@@ -133,6 +135,16 @@ class AlarmService {
       kMorningChannel,
       'Morning routine',
       description: 'Daily morning routine alarm.',
+      importance: Importance.max,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      enableVibration: true,
+      vibrationPattern: vibPattern,
+    ));
+    await androidImpl?.createNotificationChannel(AndroidNotificationChannel(
+      kEveningChannel,
+      'Evening routine',
+      description: 'Daily evening wind-down reminder.',
       importance: Importance.max,
       sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
       audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -303,6 +315,48 @@ class AlarmService {
   }
 
   Future<void> cancelMorningAlarm() => _plugin.cancel(0xCAFE);
+
+  AndroidNotificationDetails _eveningDetails() {
+    return AndroidNotificationDetails(
+      kEveningChannel,
+      'Evening routine',
+      channelDescription: 'Daily evening wind-down reminder.',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.alarm,
+      fullScreenIntent: true,
+      playSound: true,
+      sound: const UriAndroidNotificationSound('content://settings/system/alarm_alert'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      enableVibration: true,
+      vibrationPattern: Int64List.fromList(<int>[0, 500, 200, 500, 200, 500]),
+    );
+  }
+
+  Future<void> scheduleEveningAlarm({
+    required int hour,
+    required int minute,
+  }) async {
+    final now = tz.TZDateTime.now(tz.local);
+    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (!when.isAfter(now)) {
+      when = when.add(const Duration(days: 1));
+    }
+    await _plugin.zonedSchedule(
+      0xE4E4,
+      'Evening routine',
+      'Time to wind down — tap to run your evening checklist',
+      when,
+      NotificationDetails(android: _eveningDetails()),
+      androidScheduleMode: AndroidScheduleMode.alarmClock,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: jsonEncode({'kind': kActionEvening}),
+    );
+  }
+
+  Future<void> cancelEveningAlarm() => _plugin.cancel(0xE4E4);
 
   Future<void> scheduleTestAlarm({Duration delay = const Duration(seconds: 30)}) async {
     final when = DateTime.now().add(delay);

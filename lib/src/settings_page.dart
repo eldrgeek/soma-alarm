@@ -21,6 +21,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _webhookEnabled = true;
   bool _morningEnabled = true;
   TimeOfDayLite _morning = const TimeOfDayLite(7, 0);
+  bool _eveningEnabled = true;
+  TimeOfDayLite _evening = const TimeOfDayLite(21, 0);
   int _lead = 15;
 
   @override
@@ -34,6 +36,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final wEn = await Settings.webhookEnabled();
     final mEn = await Settings.morningEnabled();
     final mt = await Settings.morningTime();
+    final eEn = await Settings.eveningEnabled();
+    final et = await Settings.eveningTime();
     final lead = await Settings.leadMinutes();
     final yeshie = await Settings.yeshieHost();
     if (!mounted) return;
@@ -42,6 +46,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _webhookEnabled = wEn;
       _morningEnabled = mEn;
       _morning = mt;
+      _eveningEnabled = eEn;
+      _evening = et;
       _lead = lead;
       _yeshieHostCtrl.text = yeshie;
     });
@@ -81,6 +87,8 @@ class _SettingsPageState extends State<SettingsPage> {
       await Settings.setWebhookEnabled(_webhookEnabled);
       await Settings.setMorningEnabled(_morningEnabled);
       await Settings.setMorningTime(_morning.hour, _morning.minute);
+      await Settings.setEveningEnabled(_eveningEnabled);
+      await Settings.setEveningTime(_evening.hour, _evening.minute);
       await Settings.setLeadMinutes(_lead);
       if (yeshie.isNotEmpty) await Settings.setYeshieHost(yeshie);
       await runBackgroundPoll();
@@ -89,6 +97,12 @@ class _SettingsPageState extends State<SettingsPage> {
             .scheduleMorningAlarm(hour: _morning.hour, minute: _morning.minute);
       } else {
         await AlarmService.instance.cancelMorningAlarm();
+      }
+      if (_eveningEnabled) {
+        await AlarmService.instance
+            .scheduleEveningAlarm(hour: _evening.hour, minute: _evening.minute);
+      } else {
+        await AlarmService.instance.cancelEveningAlarm();
       }
     } catch (e) {
       _snack('Save failed: $e', isError: true);
@@ -211,6 +225,31 @@ class _SettingsPageState extends State<SettingsPage> {
               if (picked != null) {
                 setState(() =>
                     _morning = TimeOfDayLite(picked.hour, picked.minute));
+              }
+            },
+          ),
+          const Divider(height: 32),
+          Text('Evening routine',
+              style: Theme.of(context).textTheme.titleMedium),
+          SwitchListTile(
+            title: const Text('Daily evening reminder'),
+            value: _eveningEnabled,
+            onChanged: (v) => setState(() => _eveningEnabled = v),
+          ),
+          ListTile(
+            title: const Text('Time'),
+            subtitle: Text(
+                '${_evening.hour.toString().padLeft(2, '0')}:${_evening.minute.toString().padLeft(2, '0')}'),
+            trailing: const Icon(Icons.schedule),
+            onTap: () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime:
+                    TimeOfDay(hour: _evening.hour, minute: _evening.minute),
+              );
+              if (picked != null) {
+                setState(() =>
+                    _evening = TimeOfDayLite(picked.hour, picked.minute));
               }
             },
           ),

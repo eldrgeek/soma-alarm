@@ -1,4 +1,5 @@
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 class ChecklistRoutine {
@@ -36,6 +37,15 @@ class ChecklistRepo {
     'Limitless Pendant on?',
     'Phone charged?',
   ];
+
+  static const eveningDefaults = <String>[
+    'Wind-down (no screens)',
+    'Take evening meds',
+    'ACIM / reflection',
+    "Set out tomorrow's items",
+  ];
+
+  static const _kEveningRoutineIdPref = 'evening_routine_id';
 
   Database? _db;
 
@@ -184,5 +194,38 @@ class ChecklistRepo {
       if (r.isMorning) return r;
     }
     return null;
+  }
+
+  Future<ChecklistRoutine?> eveningRoutine() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getInt(_kEveningRoutineIdPref);
+    if (id == null) return null;
+    final db = await _open();
+    final rows = await db.query('routines', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return ChecklistRoutine(
+      id: r['id'] as int,
+      name: r['name'] as String,
+      isMorning: (r['is_morning'] as int) == 1,
+    );
+  }
+
+  Future<ChecklistRoutine> ensureEveningRoutine() async {
+    final existing = await eveningRoutine();
+    if (existing != null) return existing;
+    final db = await _open();
+    final id = await db.insert('routines', {'name': 'Evening routine', 'is_morning': 0});
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kEveningRoutineIdPref, id);
+    for (var i = 0; i < eveningDefaults.length; i++) {
+      await db.insert('items', {
+        'routine_id': id,
+        'label': eveningDefaults[i],
+        'order_index': i,
+        'checked': 0,
+      });
+    }
+    return ChecklistRoutine(id: id, name: 'Evening routine', isMorning: false);
   }
 }
