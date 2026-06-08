@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'checklist.dart';
+import 'voice_capture.dart';
 
 class ChecklistPage extends StatefulWidget {
   const ChecklistPage({super.key});
@@ -153,9 +154,25 @@ class _ChecklistPageState extends State<ChecklistPage> {
       ),
       floatingActionButton: _selected == null
           ? null
-          : FloatingActionButton(
-              onPressed: _addItem,
-              child: const Icon(Icons.add),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (kVoiceCaptureEnabled)
+                  VoiceCaptureButton(
+                    onLine: (line) async {
+                      await _repo.addItem(_selected!.id, line);
+                      await _load();
+                    },
+                  )
+                else
+                  VoiceCaptureButton(onLine: (_) {}),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'add_item',
+                  onPressed: _addItem,
+                  child: const Icon(Icons.add),
+                ),
+              ],
             ),
     );
   }
