@@ -11,6 +11,7 @@ import 'health_screen.dart';
 import 'jobs_screen.dart';
 import 'kanban_screen.dart';
 import 'reminders_screen.dart';
+import 'today_screen.dart';
 import 'version_chip.dart';
 
 // Putoff items are re-homed to Reminders (category: self_deferred) via Track A.
@@ -24,7 +25,7 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex = 0; // 0=Pulse 1=Jobs 2=Activity 3=Reminders 4=Health 5=Board
+  int _selectedIndex = 0; // 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
   final _searchTrigger = ValueNotifier<bool>(false);
 
   @override
@@ -38,9 +39,10 @@ class _WebShellState extends State<WebShell> {
     final screenStack = IndexedStack(
       index: _selectedIndex,
       children: [
+        const TodayScreen(),
         ConversationScreen(
-          isActive: _selectedIndex == 0,
-          onRequestFocus: () => setState(() => _selectedIndex = 0),
+          isActive: _selectedIndex == 1,
+          onRequestFocus: () => setState(() => _selectedIndex = 1),
           searchTrigger: _searchTrigger,
         ),
         const JobsScreen(),
@@ -67,7 +69,7 @@ class _WebShellState extends State<WebShell> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (_selectedIndex == 0)
+                    if (_selectedIndex == 1)
                       SizedBox(
                         width: 44,
                         height: 44,
@@ -104,6 +106,11 @@ class _WebShellState extends State<WebShell> {
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
         labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.today_outlined),
+            selectedIcon: Icon(Icons.today),
+            label: 'Today',
+          ),
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
