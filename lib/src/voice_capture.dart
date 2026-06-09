@@ -8,7 +8,7 @@
 
 import 'package:flutter/material.dart';
 
-const bool kVoiceCaptureEnabled = false;
+const bool kVoiceCaptureEnabled = true;
 
 // When kVoiceCaptureEnabled is true, replace this stub with a real
 // SpeechToText-backed implementation that streams recognized words and
