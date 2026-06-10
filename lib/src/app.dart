@@ -16,6 +16,11 @@ void navigateToAlarmAction(AlarmRecord rec) {
   );
 }
 
+void navigateToHealthTab(String component) {
+  // Tab index 5 = Health
+  WebShell.requestTab(5);
+}
+
 class SomaAlarmApp extends StatelessWidget {
   const SomaAlarmApp({super.key});
 

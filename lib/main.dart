@@ -24,6 +24,7 @@ Future<void> main() async {
   if (!kIsWeb) {
     await AlarmService.instance.init();
     AlarmService.instance.onNotificationTap = navigateToAlarmAction;
+    AlarmService.instance.onHealthNotificationTap = navigateToHealthTab;
   }
   final launchRec =
       kIsWeb ? null : await AlarmService.instance.getLaunchAlarmRecord();

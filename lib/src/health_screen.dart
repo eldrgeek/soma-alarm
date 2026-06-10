@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'alarms.dart';
 import 'settings.dart';
 
 class HealthScreen extends StatefulWidget {
@@ -21,6 +23,11 @@ class _HealthScreenState extends State<HealthScreen> {
 
   String _relayBase = Settings.defaultYeshieHost;
 
+  // Health-trigger state: streak counts, last-notified timestamps, previous statuses
+  final Map<String, int> _nonGreenStreak = {};
+  final Map<String, DateTime> _lastNotified = {};
+  final Map<String, int> _prevStatus = {};
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +40,38 @@ class _HealthScreenState extends State<HealthScreen> {
   Future<void> _loadHost() async {
     final host = await Settings.yeshieHost();
     if (mounted) setState(() => _relayBase = host);
+  }
+
+  // Fire Android notifications on green→non-green / non-green→green transitions.
+  // Debounce: component must be non-green for 2 consecutive polls before alerting.
+  // Rate-limit: max one degradation alert per component per hour.
+  void _checkHealthTransitions(Map<String, dynamic> components) {
+    if (kIsWeb) return;
+    final now = DateTime.now();
+    for (final entry in components.entries) {
+      final name = entry.key;
+      final status = (entry.value['status'] as int?) ?? 0;
+      final msg = (entry.value['msg'] as String?) ?? '';
+
+      if (status > 0) {
+        _nonGreenStreak[name] = (_nonGreenStreak[name] ?? 0) + 1;
+        if (_nonGreenStreak[name]! >= 2) {
+          final last = _lastNotified[name];
+          if (last == null || now.difference(last) >= const Duration(hours: 1)) {
+            AlarmService.instance.notifyHealthAlert(name, msg, false);
+            _lastNotified[name] = now;
+          }
+        }
+      } else {
+        // Back to green — send recovery only if we previously sent a degradation alert
+        if (_lastNotified.containsKey(name)) {
+          AlarmService.instance.notifyHealthAlert(name, 'Back to normal', true);
+          _lastNotified.remove(name);
+        }
+        _nonGreenStreak[name] = 0;
+      }
+      _prevStatus[name] = status;
+    }
   }
 
   @override
@@ -55,6 +94,8 @@ class _HealthScreenState extends State<HealthScreen> {
           _health = data;
           _error = null;
         });
+        final components = (data['components'] as Map<String, dynamic>?) ?? {};
+        _checkHealthTransitions(components);
       } else {
         setState(() => _error = 'HTTP ${resp.statusCode}');
       }

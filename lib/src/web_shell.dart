@@ -20,6 +20,11 @@ import 'version_chip.dart';
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
 
+  // Programmatically navigate to a tab (e.g., from a notification tap).
+  // Tab indices: 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
+  static void Function(int)? _navCallback;
+  static void requestTab(int tab) => _navCallback?.call(tab);
+
   @override
   State<WebShell> createState() => _WebShellState();
 }
@@ -29,7 +34,16 @@ class _WebShellState extends State<WebShell> {
   final _searchTrigger = ValueNotifier<bool>(false);
 
   @override
+  void initState() {
+    super.initState();
+    WebShell._navCallback = (tab) {
+      if (mounted) setState(() => _selectedIndex = tab);
+    };
+  }
+
+  @override
   void dispose() {
+    WebShell._navCallback = null;
     _searchTrigger.dispose();
     super.dispose();
   }

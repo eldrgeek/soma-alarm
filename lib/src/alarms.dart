@@ -14,6 +14,7 @@ const String kEventChannel = 'soma_event_alarms_v2';
 const String kMorningChannel = 'soma_morning_alarm_v2';
 const String kEveningChannel = 'soma_evening_alarm_v1';
 const String kDeeRepliesChannel = 'dee-replies';
+const String kHealthChannel = 'pulse-health-alerts';
 const String _kOldEventChannel = 'soma_event_alarms';
 const String _kOldMorningChannel = 'soma_morning_alarm';
 
@@ -95,6 +96,7 @@ class AlarmService {
   static const String _kScheduledKey = 'scheduled_alarms';
 
   void Function(AlarmRecord)? onNotificationTap;
+  void Function(String component)? onHealthNotificationTap;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -159,7 +161,41 @@ class AlarmService {
       importance: Importance.high,
     ));
 
+    await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+      kHealthChannel,
+      'Health alerts',
+      description: 'Notifications when monitored services degrade or recover.',
+      importance: Importance.high,
+    ));
+
     _initialized = true;
+  }
+
+  Future<void> notifyHealthAlert(
+    String component,
+    String msg,
+    bool isRecovery,
+  ) async {
+    if (!_initialized || kIsWeb) return;
+    final notifId = 0x20000 | (component.hashCode & 0xffff);
+    final title = isRecovery ? '$component recovered' : '$component degraded';
+    final body = msg.isEmpty
+        ? (isRecovery ? 'Service is back to normal' : 'Service is degraded')
+        : (msg.length > 120 ? '${msg.substring(0, 120)}…' : msg);
+    const details = AndroidNotificationDetails(
+      kHealthChannel,
+      'Health alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(
+      notifId,
+      title,
+      body,
+      const NotificationDetails(android: details),
+      payload: jsonEncode({'kind': 'health', 'component': component}),
+    );
   }
 
   Future<void> notifyDeeReply(String preview) async {
@@ -450,6 +486,10 @@ class AlarmService {
       final j = jsonDecode(resp.payload!) as Map<String, dynamic>;
       if (j['kind'] == 'morning') {
         await _handleResponse(resp);
+        return;
+      }
+      if (j['kind'] == 'health') {
+        onHealthNotificationTap?.call(j['component'] as String? ?? '');
         return;
       }
       final rec = AlarmRecord.fromJson(j);
