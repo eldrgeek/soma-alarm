@@ -15,6 +15,7 @@ const String kMorningChannel = 'soma_morning_alarm_v2';
 const String kEveningChannel = 'soma_evening_alarm_v1';
 const String kDeeRepliesChannel = 'dee-replies';
 const String kHealthChannel = 'pulse-health-alerts';
+const String kAsksChannel = 'pulse-asks';
 const String _kOldEventChannel = 'soma_event_alarms';
 const String _kOldMorningChannel = 'soma_morning_alarm';
 
@@ -97,6 +98,7 @@ class AlarmService {
 
   void Function(AlarmRecord)? onNotificationTap;
   void Function(String component)? onHealthNotificationTap;
+  void Function(String askId)? onAskNotificationTap;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -168,6 +170,13 @@ class AlarmService {
       importance: Importance.high,
     ));
 
+    await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
+      kAsksChannel,
+      'Asks',
+      description: 'Human-in-the-loop asks awaiting Confirm/Partial/Failed.',
+      importance: Importance.high,
+    ));
+
     _initialized = true;
   }
 
@@ -195,6 +204,27 @@ class AlarmService {
       body,
       const NotificationDetails(android: details),
       payload: jsonEncode({'kind': 'health', 'component': component}),
+    );
+  }
+
+  Future<void> notifyAsk(String askId, String message) async {
+    if (!_initialized || kIsWeb) return;
+    final notifId = 0x30000 | (askId.hashCode & 0xffff);
+    final body =
+        message.length > 240 ? '${message.substring(0, 240)}…' : message;
+    const details = AndroidNotificationDetails(
+      kAsksChannel,
+      'Asks',
+      importance: Importance.high,
+      priority: Priority.high,
+      autoCancel: true,
+    );
+    await _plugin.show(
+      notifId,
+      'Ask: confirm needed',
+      body,
+      const NotificationDetails(android: details),
+      payload: jsonEncode({'kind': 'ask', 'askId': askId}),
     );
   }
 
@@ -490,6 +520,10 @@ class AlarmService {
       }
       if (j['kind'] == 'health') {
         onHealthNotificationTap?.call(j['component'] as String? ?? '');
+        return;
+      }
+      if (j['kind'] == 'ask') {
+        onAskNotificationTap?.call(j['askId'] as String? ?? '');
         return;
       }
       final rec = AlarmRecord.fromJson(j);

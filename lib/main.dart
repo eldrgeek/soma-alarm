@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'src/alarms.dart';
 import 'src/app.dart';
 import 'src/background.dart';
+import 'src/web_shell.dart';
 import 'theme/theme_provider.dart';
 
 @pragma('vm:entry-point')
@@ -25,6 +26,8 @@ Future<void> main() async {
     await AlarmService.instance.init();
     AlarmService.instance.onNotificationTap = navigateToAlarmAction;
     AlarmService.instance.onHealthNotificationTap = navigateToHealthTab;
+    // Asks render in the global AsksBanner; opening the app is enough.
+    AlarmService.instance.onAskNotificationTap = (_) => WebShell.requestTab(0);
   }
   final launchRec =
       kIsWeb ? null : await AlarmService.instance.getLaunchAlarmRecord();

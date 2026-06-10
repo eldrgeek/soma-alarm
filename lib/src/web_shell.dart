@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'settings.dart';
 import 'about_page.dart';
 import 'activity_screen.dart';
+import 'asks_banner.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
 import 'jobs_screen.dart';
@@ -68,7 +69,11 @@ class _WebShellState extends State<WebShell> {
     );
 
     return Scaffold(
-      body: Stack(
+      body: Column(
+        children: [
+          // Pending cc hud-ask items — global, visible on every tab.
+          const AsksBanner(),
+          Expanded(child: Stack(
         children: [
           screenStack,
           Positioned(
@@ -113,6 +118,8 @@ class _WebShellState extends State<WebShell> {
               ),
             ),
           ),
+        ],
+      )),
         ],
       ),
       bottomNavigationBar: NavigationBar(
