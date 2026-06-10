@@ -441,7 +441,13 @@ class _JobsScreenState extends State<JobsScreen> {
     final filtered = _filteredItems;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pulse — Jobs'),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Jobs'),
+            Text('Dispatched work units', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

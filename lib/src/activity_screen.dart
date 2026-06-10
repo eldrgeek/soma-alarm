@@ -20,6 +20,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
   Timer? _pollTimer;
   bool _fetching = false;
 
+  // Daemon triage feed
+  List<Map<String, dynamic>> _daemonItems = [];
+  bool _daemonExpanded = true;
+
   Map<String, dynamic>? _selected;
   String? _content;
   bool _loadingDetail = false;
@@ -50,21 +54,27 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (_fetching) return;
     _fetching = true;
     try {
-      final resp = await http
-          .get(Uri.parse('$_base/artifacts/activity?limit=60'))
-          .timeout(const Duration(seconds: 5));
+      final futures = await Future.wait([
+        http.get(Uri.parse('$_base/artifacts/activity?limit=60')).timeout(const Duration(seconds: 5)),
+        http.get(Uri.parse('$_base/artifacts/daemon-decisions?limit=20')).timeout(const Duration(seconds: 5)),
+      ]);
       if (!mounted) return;
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        setState(() {
-          _items = (data['items'] as List<dynamic>?)
-                  ?.cast<Map<String, dynamic>>() ??
-              [];
+      final actResp = futures[0];
+      final daemonResp = futures[1];
+      setState(() {
+        if (actResp.statusCode == 200) {
+          final data = jsonDecode(actResp.body) as Map<String, dynamic>;
+          _items = (data['items'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
           _error = null;
-        });
-      } else {
-        setState(() => _error = 'HTTP ${resp.statusCode}');
-      }
+        } else {
+          _error = 'HTTP ${actResp.statusCode}';
+        }
+        if (daemonResp.statusCode == 200) {
+          final data = jsonDecode(daemonResp.body) as Map<String, dynamic>;
+          _daemonItems = (data['items'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+        }
+        // daemon fetch errors are silently ignored — relay may not have the log dir
+      });
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -118,7 +128,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pulse — Activity'),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Activity'),
+            Text('Cross-surface event stream', style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -127,13 +143,37 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
+      body: ListView(
         padding: const EdgeInsets.all(12),
-        itemCount: _items.length,
-        itemBuilder: (ctx, i) => _ActivityCard(
-          item: _items[i],
-          onTap: () => _loadDetail(_items[i]),
-        ),
+        children: [
+          if (_daemonItems.isNotEmpty) ...[
+            InkWell(
+              onTap: () => setState(() => _daemonExpanded = !_daemonExpanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(_daemonExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: Colors.tealAccent),
+                    const SizedBox(width: 6),
+                    const Text('Triage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.tealAccent)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+                      child: Text('${_daemonItems.length}', style: const TextStyle(fontSize: 10, color: Colors.tealAccent)),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text('email-daemon forwards', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              ),
+            ),
+            if (_daemonExpanded)
+              ..._daemonItems.map((d) => _DaemonDecisionCard(item: d)),
+            const Divider(),
+          ],
+          ..._items.map((item) => _ActivityCard(item: item, onTap: () => _loadDetail(item))),
+        ],
       ),
     );
   }
@@ -248,6 +288,87 @@ class _ActivityCard extends StatelessWidget {
               const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DaemonDecisionCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  const _DaemonDecisionCard({required this.item});
+
+  String _age(String? ts) {
+    if (ts == null) return '';
+    final dt = DateTime.tryParse(ts);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt.toLocal());
+    if (diff.inDays > 1) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'just now';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final from = item['from'] as String? ?? '';
+    final subject = item['subject'] as String? ?? '';
+    final summary = item['summary'] as String? ?? '';
+    final action = item['action'] as String? ?? '';
+    final loggedAt = item['logged_at'] as String?;
+
+    final isUrgent = action.contains('urgent');
+    final actionColor = isUrgent ? Colors.orange : Colors.teal;
+    final actionLabel = isUrgent ? 'forwarded urgent' : 'forwarded';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: actionColor.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: actionColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(actionLabel,
+                      style: TextStyle(fontSize: 10, color: actionColor, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(subject,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                Text(_age(loggedAt), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+            if (from.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('From: $from',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis),
+              ),
+            if (summary.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(summary,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade300),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ),
+          ],
         ),
       ),
     );
