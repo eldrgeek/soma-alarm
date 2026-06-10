@@ -51,7 +51,7 @@ The PNG is regenerated only on `--force` or when missing — the URL is meant to
 | Symptom                                              | Fix                                                                                  |
 |------------------------------------------------------|---------------------------------------------------------------------------------------|
 | `no Pixel found via mDNS` and adb connect fails      | Plug Pixel in via USB, or re-pair wireless adb (Settings → Developer options → Wireless debugging → Pair using pairing code). The script auto-falls-back to USB. |
-| `SSH to dev@vpsmikewolf.duckdns.org failed`          | Check VPN, DNS, and that the VPS is up. Easiest sanity: `curl -sI https://vpsmikewolf.duckdns.org/pulse/latest.apk`. If the URL responds, scp keys are the issue — set `VPS_PASSWORD=magicalaisystem` and retry. |
+| `SSH to dev@vpsmikewolf.duckdns.org failed`          | Check VPN, DNS, and that the VPS is up. Easiest sanity: `curl -sI https://vpsmikewolf.duckdns.org/pulse/latest.apk`. If the URL responds, SSH key is the issue — ensure `~/.ssh/id_ed25519_vps` is present (VPS password retired from files 2026-06-10; emergency copy in Mike's password manager). |
 | Pixel not on home wifi (LTE/coffee shop)             | Use `push-vps`, then scan the QR.                                                     |
 | `Unable to locate a Java Runtime`                    | `export JAVA_HOME=/opt/homebrew/opt/openjdk@21 && export PATH="$JAVA_HOME/bin:$PATH"`. |
 | `LicenceNotAcceptedException` for NDK                | Open Android Studio → SDK Manager → accept NDK license; or `yes \| sdkmanager --licenses`. |
