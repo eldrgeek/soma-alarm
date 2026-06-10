@@ -6,7 +6,17 @@ class ChecklistRoutine {
   final int id;
   final String name;
   final bool isMorning;
-  ChecklistRoutine({required this.id, required this.name, required this.isMorning});
+  // HH:MM string, nullable = no specific time
+  final String? triggerTime;
+  // 'daily', 'weekdays', 'weekends', 'manual'
+  final String recurrence;
+  ChecklistRoutine({
+    required this.id,
+    required this.name,
+    required this.isMorning,
+    this.triggerTime,
+    this.recurrence = 'daily',
+  });
 }
 
 class ChecklistItem {
@@ -25,10 +35,19 @@ class ChecklistItem {
     required this.checked,
     this.checkedAt,
   });
+
+  ChecklistItem copyWith({bool? checked, DateTime? checkedAt}) => ChecklistItem(
+        id: id,
+        routineId: routineId,
+        label: label,
+        orderIndex: orderIndex,
+        checked: checked ?? this.checked,
+        checkedAt: checkedAt ?? this.checkedAt,
+      );
 }
 
 class ChecklistRepo {
-  static const _kDbVersion = 1;
+  static const _kDbVersion = 3;
   static const _kDbName = 'soma_checklist.db';
 
   static const morningDefaults = <String>[
@@ -56,12 +75,31 @@ class ChecklistRepo {
     _db = await openDatabase(
       path,
       version: _kDbVersion,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add checked_day for daily-reset logic (may be missing on old installs)
+          try {
+            await db.execute('ALTER TABLE items ADD COLUMN checked_day TEXT');
+          } catch (_) { /* already exists */ }
+        }
+        if (oldVersion < 3) {
+          // Add trigger_time and recurrence to routines
+          try {
+            await db.execute('ALTER TABLE routines ADD COLUMN trigger_time TEXT');
+          } catch (_) {}
+          try {
+            await db.execute("ALTER TABLE routines ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'daily'");
+          } catch (_) {}
+        }
+      },
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE routines(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            is_morning INTEGER NOT NULL DEFAULT 0
+            is_morning INTEGER NOT NULL DEFAULT 0,
+            trigger_time TEXT,
+            recurrence TEXT NOT NULL DEFAULT 'daily'
           )
         ''');
         await db.execute('''
@@ -117,6 +155,8 @@ class ChecklistRepo {
               id: r['id'] as int,
               name: r['name'] as String,
               isMorning: (r['is_morning'] as int) == 1,
+              triggerTime: r['trigger_time'] as String?,
+              recurrence: (r['recurrence'] as String?) ?? 'daily',
             ))
         .toList();
   }
@@ -124,6 +164,15 @@ class ChecklistRepo {
   Future<int> createRoutine(String name) async {
     final db = await _open();
     return db.insert('routines', {'name': name, 'is_morning': 0});
+  }
+
+  Future<void> updateRoutine(int id, {String? name, String? triggerTime, String? recurrence}) async {
+    final db = await _open();
+    final vals = <String, dynamic>{};
+    if (name != null) vals['name'] = name;
+    if (triggerTime != null) vals['trigger_time'] = triggerTime;
+    if (recurrence != null) vals['recurrence'] = recurrence;
+    if (vals.isNotEmpty) await db.update('routines', vals, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteRoutine(int routineId) async {
@@ -208,6 +257,8 @@ class ChecklistRepo {
       id: r['id'] as int,
       name: r['name'] as String,
       isMorning: (r['is_morning'] as int) == 1,
+      triggerTime: r['trigger_time'] as String?,
+      recurrence: (r['recurrence'] as String?) ?? 'daily',
     );
   }
 
