@@ -346,7 +346,30 @@ class _KanbanScreenState extends State<KanbanScreen> {
             itemBuilder: (_, i) => _column(i),
           ),
         ),
+        _pageDots(),
       ],
+    );
+  }
+
+  Widget _pageDots() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(4, (i) {
+          final sel = _currentColumn == i;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: sel ? 16 : 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: sel ? _columnColors[i] : Colors.grey.shade700,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          );
+        }),
+      ),
     );
   }
 
