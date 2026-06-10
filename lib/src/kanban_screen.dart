@@ -226,8 +226,18 @@ class _KanbanScreenState extends State<KanbanScreen> {
           .timeout(const Duration(seconds: 6));
       if (!mounted) return;
       if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final list = (data['projects'] as List?)
+        dynamic decoded;
+        try {
+          decoded = jsonDecode(resp.body);
+        } catch (e) {
+          setState(() => _error = 'JSON parse error: $e\nbody: ${resp.body.substring(0, resp.body.length.clamp(0, 200))}');
+          return;
+        }
+        if (decoded is! Map<String, dynamic>) {
+          setState(() => _error = 'Unexpected response (${decoded.runtimeType}): ${resp.body.substring(0, resp.body.length.clamp(0, 200))}');
+          return;
+        }
+        final list = (decoded['projects'] as List?)
                 ?.map((e) => Map<String, dynamic>.from(e as Map))
                 .toList() ??
             [];
@@ -236,11 +246,20 @@ class _KanbanScreenState extends State<KanbanScreen> {
           _error = null;
         });
       } else {
-        final body = jsonDecode(resp.body) as Map<String, dynamic>? ?? {};
-        setState(() => _error = body['error']?.toString() ?? 'HTTP ${resp.statusCode}');
+        String msg = 'HTTP ${resp.statusCode}';
+        try {
+          final d = jsonDecode(resp.body);
+          if (d is Map<String, dynamic>) msg = d['error']?.toString() ?? msg;
+        } catch (_) {
+          msg = 'HTTP ${resp.statusCode}: ${resp.body.substring(0, resp.body.length.clamp(0, 120))}';
+        }
+        setState(() => _error = msg);
       }
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+    } catch (e, stack) {
+      if (mounted) {
+        final brief = stack.toString().split('\n').take(4).join(' | ');
+        setState(() => _error = '$e\n$brief');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -277,8 +296,28 @@ class _KanbanScreenState extends State<KanbanScreen> {
             Container(
               width: double.infinity,
               color: Colors.red.shade900,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(_error!, style: const TextStyle(color: Colors.white, fontSize: 12)),
+              padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _loading ? null : _fetch,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Retry', style: TextStyle(fontSize: 11)),
+                  ),
+                ],
+              ),
             ),
           Expanded(
             child: wide ? _wideLayout() : _narrowLayout(),
