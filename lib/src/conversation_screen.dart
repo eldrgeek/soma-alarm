@@ -95,6 +95,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _showThinking = false;
   DateTime? _thinkingStart;
 
+  // ── Pipeline state: track last send time for "waiting" indicator ──────
+  DateTime? _lastSentAt;
+  // One of: null, 'sent', 'working', 'replied'
+  String? _pipelineState;
+
   @override
   void initState() {
     super.initState();
@@ -139,7 +144,30 @@ class _ConversationScreenState extends State<ConversationScreen>
         setState(() {
           _showThinking = true;
           _thinkingStart = DateTime.now();
+          _pipelineState = 'working';
         });
+      } else if (data is Map && data['type'] == 'dee_reply') {
+        final ts = data['ts'] as String?;
+        final body = data['body'] as String?;
+        if (ts != null && body != null) {
+          // Dedup: skip if already present (polling may have fetched it first).
+          if (!_messages.any((m) => m.ts == ts && m.from == 'dee')) {
+            final msg = _Message(
+              from: 'dee',
+              ts: ts,
+              body: body,
+              inReplyTo: data['in_reply_to'] as String?,
+            );
+            setState(() {
+              _messages = [..._messages, msg];
+              _showThinking = false;
+              _thinkingStart = null;
+              if (_lastTs == null || ts.compareTo(_lastTs!) > 0) _lastTs = ts;
+              _bottomSpacer = 0;
+            });
+            _scrollToBottom();
+          }
+        }
       }
     });
     _pulseSocket!.connect();
@@ -312,7 +340,12 @@ class _ConversationScreenState extends State<ConversationScreen>
             // Clear the send-spacer now that content is arriving.
             if (hadSpacer) _bottomSpacer = 0;
             // Dismiss thinking indicator when Dee's first chunk arrives.
-            if (deeArrived) { _showThinking = false; _thinkingStart = null; }
+            if (deeArrived) {
+              _showThinking = false;
+              _thinkingStart = null;
+              _pipelineState = 'replied';
+              _lastSentAt = null;
+            }
           });
 
           if (dedupedMsgs.isNotEmpty) {
@@ -497,7 +530,11 @@ class _ConversationScreenState extends State<ConversationScreen>
       ).timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (resp.statusCode == 200) {
-        setState(() => _sendSuccess = true);
+        setState(() {
+          _sendSuccess = true;
+          _lastSentAt = DateTime.now();
+          _pipelineState = 'sent';
+        });
         await Future.delayed(const Duration(seconds: 2));
         if (mounted) setState(() => _sendSuccess = false);
       } else {
@@ -643,6 +680,10 @@ class _ConversationScreenState extends State<ConversationScreen>
     final theme = Theme.of(context);
     return SelectionArea(child: Column(
       children: [
+        // ── Pipeline state banner ─────────────────────────────────────
+        if (_pipelineState != null && _pipelineState != 'replied' && !_showThinking)
+          _PipelineBanner(state: _pipelineState!, sentAt: _lastSentAt),
+
         // ── Idle / blur nudge banner ──────────────────────────────────
         if (_showIdleBanner && _draftBatch.isNotEmpty)
           _IdleBanner(
@@ -947,6 +988,66 @@ class _IdleBanner extends StatelessWidget {
             icon: const Icon(Icons.close, size: 16, color: Color(0xFF8B6914)),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pipeline state banner ─────────────────────────────────────────────────────
+
+class _PipelineBanner extends StatefulWidget {
+  final String state;
+  final DateTime? sentAt;
+  const _PipelineBanner({required this.state, this.sentAt});
+
+  @override
+  State<_PipelineBanner> createState() => _PipelineBannerState();
+}
+
+class _PipelineBannerState extends State<_PipelineBanner> {
+  late Timer _ticker;
+  int _elapsed = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _elapsed = widget.sentAt != null ? DateTime.now().difference(widget.sentAt!).inSeconds : 0;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {
+          _elapsed = widget.sentAt != null ? DateTime.now().difference(widget.sentAt!).inSeconds : _elapsed + 1;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (widget.state) {
+      'sent' => 'Sent · waiting for Dee…',
+      'working' => 'Dee is working…',
+      _ => widget.state,
+    };
+    final elapsed = _elapsed > 0 ? ' (${_elapsed}s)' : '';
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF1A2733),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Row(
+        children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.tealAccent)),
+          const SizedBox(width: 10),
+          Text(
+            '$label$elapsed',
+            style: const TextStyle(fontSize: 12, color: Colors.tealAccent),
           ),
         ],
       ),
