@@ -108,7 +108,7 @@ class Settings {
 
   static Future<int> leadMinutes() async {
     final p = await SharedPreferences.getInstance();
-    return p.getInt(_kLeadMinutes) ?? 15;
+    return p.getInt(_kLeadMinutes) ?? 30;
   }
 
   static Future<void> setLeadMinutes(int v) async {
