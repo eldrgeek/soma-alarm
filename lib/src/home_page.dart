@@ -348,14 +348,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             tooltip: 'Diagnostics',
             onPressed: _showDiagnostics,
           ),
-          if (!kIsWeb)
-            IconButton(
-              icon: const Icon(Icons.checklist_rtl),
-              tooltip: 'Routines',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ChecklistPage()),
-              ),
+          IconButton(
+            icon: const Icon(Icons.checklist_rtl),
+            tooltip: 'Routines',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChecklistPage()),
             ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Settings',

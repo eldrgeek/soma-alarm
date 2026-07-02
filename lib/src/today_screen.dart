@@ -29,6 +29,8 @@ class _TodayScreenState extends State<TodayScreen> with AutomaticKeepAliveClient
   List<ChecklistItem> _morningItems = [];
   ChecklistRoutine? _eveningRoutine;
   List<ChecklistItem> _eveningItems = [];
+  ChecklistRoutine? _todoRoutine;
+  List<ChecklistItem> _todoItems = [];
   List<_ProgressEntry> _progressEntries = [];
 
   @override
@@ -67,18 +69,24 @@ class _TodayScreenState extends State<TodayScreen> with AutomaticKeepAliveClient
   }
 
   Future<void> _loadRoutines() async {
-    if (kIsWeb) return;
+    // Checklist/to-do data is available on every platform: ChecklistRepo
+    // delegates to a shared_preferences-backed store on web (sqflite has
+    // no web backend) and to sqflite natively.
     await _repo.resetIfNewDay();
     final morning = await _repo.morningRoutine();
     final morningItems = morning != null ? await _repo.items(morning.id) : <ChecklistItem>[];
     final evening = await _repo.eveningRoutine();
     final eveningItems = evening != null ? await _repo.items(evening.id) : <ChecklistItem>[];
+    final todo = await _repo.todoRoutine();
+    final todoItems = todo != null ? await _repo.items(todo.id) : <ChecklistItem>[];
     if (mounted) {
       setState(() {
         _morningRoutine = morning;
         _morningItems = morningItems;
         _eveningRoutine = evening;
         _eveningItems = eveningItems;
+        _todoRoutine = todo;
+        _todoItems = todoItems;
       });
     }
   }
@@ -157,6 +165,20 @@ class _TodayScreenState extends State<TodayScreen> with AutomaticKeepAliveClient
                             style: const TextStyle(color: Colors.white)),
                       ),
                     ),
+
+                  // ── To-Do ───────────────────────────────────────────────
+                  // The plain, persistent to-do list — top of the page since
+                  // it's the most-frequent thing Mike checks/acts on here.
+                  if (_todoRoutine != null) ...[
+                    _routineSection(
+                      context,
+                      icon: Icons.checklist,
+                      title: 'To-Do',
+                      routine: _todoRoutine,
+                      items: _todoItems,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // ── Calendar events ────────────────────────────────────
                   _sectionHeader(context, Icons.calendar_today, "Today's events"),
@@ -291,7 +313,7 @@ class _TodayScreenState extends State<TodayScreen> with AutomaticKeepAliveClient
         else ...[
           Card(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -309,45 +331,114 @@ class _TodayScreenState extends State<TodayScreen> with AutomaticKeepAliveClient
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
-                  if (items.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    ...items.map((item) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: [
-                              Icon(
-                                item.checked
-                                    ? Icons.check_box
-                                    : Icons.check_box_outline_blank,
-                                size: 18,
-                                color: item.checked
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context).colorScheme.outline,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  item.label,
-                                  style: TextStyle(
-                                    decoration: item.checked
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                    color: item.checked
-                                        ? Theme.of(context).colorScheme.outline
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                  ],
+                  const SizedBox(height: 4),
+                  ...items.map((item) => _todoRow(context, routine, item)),
+                  _addItemRow(context, routine),
                 ],
               ),
             ),
           ),
         ],
       ],
+    );
+  }
+
+  // A single to-do row: tap toggles done, long-press opens a bottom sheet
+  // with delete. 48dp min height keeps the tap target accessible.
+  Widget _todoRow(BuildContext context, ChecklistRoutine routine, ChecklistItem item) {
+    return InkWell(
+      onTap: () => _toggleItem(item, !item.checked),
+      onLongPress: () => _showItemActions(context, item),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            Checkbox(
+              value: item.checked,
+              onChanged: (v) => _toggleItem(item, v ?? false),
+            ),
+            Expanded(
+              child: Text(
+                item.label,
+                style: TextStyle(
+                  decoration: item.checked ? TextDecoration.lineThrough : null,
+                  color: item.checked ? Theme.of(context).colorScheme.outline : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _addItemRow(BuildContext context, ChecklistRoutine routine) {
+    return InkWell(
+      onTap: () => _addItem(routine),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 20, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Text('Add item',
+                style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleItem(ChecklistItem item, bool value) async {
+    await _repo.setChecked(item.id, value);
+    await _loadRoutines();
+  }
+
+  Future<void> _addItem(ChecklistRoutine routine) async {
+    final controller = TextEditingController();
+    final label = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New item'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Label'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (label == null || label.isEmpty) return;
+    await _repo.addItem(routine.id, label);
+    await _loadRoutines();
+  }
+
+  Future<void> _showItemActions(BuildContext context, ChecklistItem item) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _repo.removeItem(item.id);
+                await _loadRoutines();
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

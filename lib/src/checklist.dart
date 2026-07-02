@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+
+import 'checklist_web_store.dart';
 
 class ChecklistRoutine {
   final int id;
@@ -65,6 +68,12 @@ class ChecklistRepo {
   ];
 
   static const _kEveningRoutineIdPref = 'evening_routine_id';
+
+  // sqflite has no default web backend. On web, every method below
+  // delegates to a shared_preferences-backed store with the same public
+  // API instead — same idiom as `Settings` (JSON blob, no database).
+  // Native (Android/iOS) is completely untouched below this line.
+  static final ChecklistWebStore _webStore = ChecklistWebStore();
 
   Database? _db;
 
@@ -137,17 +146,23 @@ class ChecklistRepo {
   }
 
   Future<void> resetIfNewDay() async {
+    if (kIsWeb) return _webStore.resetIfNewDay();
     final db = await _open();
     final today = _today();
-    await db.update(
-      'items',
-      {'checked': 0, 'checked_at': null, 'checked_day': null},
-      where: '(checked_day IS NULL OR checked_day != ?) AND checked = 1',
-      whereArgs: [today],
-    );
+    // 'manual' routines (e.g. the plain to-do list) are not daily
+    // checklists — completed items stay checked until the user unchecks
+    // or deletes them, so they're excluded from the daily reset sweep.
+    await db.rawUpdate('''
+      UPDATE items SET checked = 0, checked_at = NULL, checked_day = NULL
+      WHERE (checked_day IS NULL OR checked_day != ?) AND checked = 1
+        AND routine_id NOT IN (
+          SELECT id FROM routines WHERE recurrence = 'manual'
+        )
+    ''', [today]);
   }
 
   Future<List<ChecklistRoutine>> routines() async {
+    if (kIsWeb) return _webStore.routines();
     final db = await _open();
     final rows = await db.query('routines', orderBy: 'is_morning DESC, id ASC');
     return rows
@@ -162,11 +177,15 @@ class ChecklistRepo {
   }
 
   Future<int> createRoutine(String name) async {
+    if (kIsWeb) return _webStore.createRoutine(name);
     final db = await _open();
     return db.insert('routines', {'name': name, 'is_morning': 0});
   }
 
   Future<void> updateRoutine(int id, {String? name, String? triggerTime, String? recurrence}) async {
+    if (kIsWeb) {
+      return _webStore.updateRoutine(id, name: name, triggerTime: triggerTime, recurrence: recurrence);
+    }
     final db = await _open();
     final vals = <String, dynamic>{};
     if (name != null) vals['name'] = name;
@@ -176,12 +195,14 @@ class ChecklistRepo {
   }
 
   Future<void> deleteRoutine(int routineId) async {
+    if (kIsWeb) return _webStore.deleteRoutine(routineId);
     final db = await _open();
     await db.delete('items', where: 'routine_id = ?', whereArgs: [routineId]);
     await db.delete('routines', where: 'id = ?', whereArgs: [routineId]);
   }
 
   Future<List<ChecklistItem>> items(int routineId) async {
+    if (kIsWeb) return _webStore.items(routineId);
     await resetIfNewDay();
     final db = await _open();
     final rows = await db.query(
@@ -205,6 +226,7 @@ class ChecklistRepo {
   }
 
   Future<void> setChecked(int itemId, bool checked) async {
+    if (kIsWeb) return _webStore.setChecked(itemId, checked);
     final db = await _open();
     await db.update(
       'items',
@@ -219,6 +241,7 @@ class ChecklistRepo {
   }
 
   Future<int> addItem(int routineId, String label) async {
+    if (kIsWeb) return _webStore.addItem(routineId, label);
     final db = await _open();
     final maxOrder = Sqflite.firstIntValue(await db.rawQuery(
             'SELECT COALESCE(MAX(order_index), -1) FROM items WHERE routine_id = ?',
@@ -233,11 +256,13 @@ class ChecklistRepo {
   }
 
   Future<void> removeItem(int itemId) async {
+    if (kIsWeb) return _webStore.removeItem(itemId);
     final db = await _open();
     await db.delete('items', where: 'id = ?', whereArgs: [itemId]);
   }
 
   Future<ChecklistRoutine?> morningRoutine() async {
+    // routines() already branches on kIsWeb internally.
     final list = await routines();
     for (final r in list) {
       if (r.isMorning) return r;
@@ -245,7 +270,21 @@ class ChecklistRepo {
     return null;
   }
 
+  // The plain, non-daily to-do list. Web seeds this routine automatically
+  // (see ChecklistWebStore); native does not auto-create it (Pixel/Android
+  // parity is a deliberate follow-up, not silently added to existing
+  // installs) — it only surfaces here if the user has already created one
+  // via the Routines screen.
+  Future<ChecklistRoutine?> todoRoutine() async {
+    final list = await routines();
+    for (final r in list) {
+      if (r.name == 'To-Do') return r;
+    }
+    return null;
+  }
+
   Future<ChecklistRoutine?> eveningRoutine() async {
+    if (kIsWeb) return _webStore.eveningRoutine();
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getInt(_kEveningRoutineIdPref);
     if (id == null) return null;
@@ -263,6 +302,7 @@ class ChecklistRepo {
   }
 
   Future<ChecklistRoutine> ensureEveningRoutine() async {
+    if (kIsWeb) return _webStore.ensureEveningRoutine();
     final existing = await eveningRoutine();
     if (existing != null) return existing;
     final db = await _open();
