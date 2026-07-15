@@ -149,11 +149,14 @@ class _ConversationScreenState extends State<ConversationScreen>
       } else if (data is Map && data['type'] == 'dee_reply') {
         final ts = data['ts'] as String?;
         final body = data['body'] as String?;
+        final from = (data['from'] as String?) ?? 'dee';
+        final speaker = (data['speaker'] as String?) ?? from;
         if (ts != null && body != null) {
           // Dedup: skip if already present (polling may have fetched it first).
-          if (!_messages.any((m) => m.ts == ts && m.from == 'dee')) {
+          if (!_messages.any((m) => m.ts == ts && m.from == from)) {
             final msg = _Message(
-              from: 'dee',
+              from: from,
+              speaker: speaker,
               ts: ts,
               body: body,
               inReplyTo: data['in_reply_to'] as String?,
@@ -293,8 +296,8 @@ class _ConversationScreenState extends State<ConversationScreen>
             .toList();
         if (newMsgs.isNotEmpty) {
           // Notification guard — inactive covers brief focus loss (shade pull, tap).
-          if (_initialLoadDone && newMsgs.any((m) => m.from == 'dee')) {
-            final first = newMsgs.firstWhere((m) => m.from == 'dee');
+          if (_initialLoadDone && newMsgs.any((m) => m.from != 'mike')) {
+            final first = newMsgs.firstWhere((m) => m.from != 'mike');
             final foregrounded = _appLifecycle == AppLifecycleState.resumed ||
                 _appLifecycle == AppLifecycleState.inactive;
             if (!foregrounded) {
@@ -315,7 +318,8 @@ class _ConversationScreenState extends State<ConversationScreen>
             if (!_pendingClientIds.containsKey(m.clientId!)) return true;
             final optimistic = _pendingClientIds.remove(m.clientId!);
             if (optimistic == null) return false; // batch send → swallow
-            if (m.body == optimistic.body) return false; // exact match → swallow
+            if (m.body == optimistic.body)
+              return false; // exact match → swallow
             // Body differs (e.g. compressed) → replace optimistic in list
             final idx = _messages.indexOf(optimistic);
             if (idx >= 0) replacements[idx] = m;
@@ -324,19 +328,21 @@ class _ConversationScreenState extends State<ConversationScreen>
 
           final isInitial = _lastTs == null;
           final hadSpacer = _bottomSpacer > 0 && dedupedMsgs.isNotEmpty;
-          final deeArrived = dedupedMsgs.any((m) => m.from == 'dee');
+          final deeArrived = dedupedMsgs.any((m) => m.from != 'mike');
           setState(() {
             for (final e in replacements.entries) {
               _messages[e.key] = e.value;
             }
             if (dedupedMsgs.isNotEmpty) {
-              _messages = isInitial ? dedupedMsgs : [..._messages, ...dedupedMsgs];
+              _messages =
+                  isInitial ? dedupedMsgs : [..._messages, ...dedupedMsgs];
             }
             // FIX: duplicate-on-send — only advance _lastTs forward, never rewind.
             // Rewinding can re-expose server echoes whose clientId was already removed
             // from _pendingClientIds, causing them to appear as duplicate bubbles.
             final newTs = newMsgs.last.ts;
-            if (_lastTs == null || newTs.compareTo(_lastTs!) > 0) _lastTs = newTs;
+            if (_lastTs == null || newTs.compareTo(_lastTs!) > 0)
+              _lastTs = newTs;
             // Clear the send-spacer now that content is arriving.
             if (hadSpacer) _bottomSpacer = 0;
             // Dismiss thinking indicator when Dee's first chunk arrives.
@@ -430,21 +436,30 @@ class _ConversationScreenState extends State<ConversationScreen>
   // ── Flush draft batch to /dispatch_input_compressed ─────────────────
   Future<void> _flushBatch() async {
     if (_draftBatch.isEmpty || _flushing) return;
-    setState(() { _flushing = true; _showIdleBanner = false; });
+    setState(() {
+      _flushing = true;
+      _showIdleBanner = false;
+    });
 
     final combined = _draftBatch.join('\n\n\n');
     final secret = await _loadSecret();
     final batchClientId = _generateUuid();
 
     try {
-      final resp = await http.post(
-        Uri.parse('$_base/dispatch_input_compressed'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (secret.isNotEmpty) 'x-dispatch-token': secret,
-        },
-        body: jsonEncode({'message': combined, 'source': 'pulse-draft-batch', 'client_id': batchClientId}),
-      ).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .post(
+            Uri.parse('$_base/dispatch_input_compressed'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (secret.isNotEmpty) 'x-dispatch-token': secret,
+            },
+            body: jsonEncode({
+              'message': combined,
+              'source': 'pulse-draft-batch',
+              'client_id': batchClientId
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
       if (resp.statusCode == 200) {
@@ -520,14 +535,17 @@ class _ConversationScreenState extends State<ConversationScreen>
 
     final payload = <String, dynamic>{'client_id': clientId};
     if (text.isNotEmpty) payload['text'] = text;
-    if (imageData != null) payload['image'] = {'data': imageData, 'mediaType': imageMediaType};
+    if (imageData != null)
+      payload['image'] = {'data': imageData, 'mediaType': imageMediaType};
 
     try {
-      final resp = await http.post(
-        Uri.parse('$_base/pulse/capture'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .post(
+            Uri.parse('$_base/pulse/capture'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (resp.statusCode == 200) {
         setState(() {
@@ -609,7 +627,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   void _showDeeReplyToast(String preview) {
-    final trimmed = preview.length > 80 ? '${preview.substring(0, 80)}…' : preview;
+    final trimmed =
+        preview.length > 80 ? '${preview.substring(0, 80)}…' : preview;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Dee: $trimmed'),
@@ -627,19 +646,21 @@ class _ConversationScreenState extends State<ConversationScreen>
       setState(() => _searchResults = []);
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _runSearch(q.trim()));
+    _searchDebounce =
+        Timer(const Duration(milliseconds: 300), () => _runSearch(q.trim()));
   }
 
   Future<void> _runSearch(String q) async {
     setState(() => _searchLoading = true);
     try {
-      final uri = Uri.parse('$_base/conversation/search?q=${Uri.encodeQueryComponent(q)}');
+      final uri = Uri.parse(
+          '$_base/conversation/search?q=${Uri.encodeQueryComponent(q)}');
       final resp = await http.get(uri).timeout(const Duration(seconds: 8));
       if (!mounted) return;
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final results = (data['results'] as List<dynamic>)
-            .cast<Map<String, dynamic>>();
+        final results =
+            (data['results'] as List<dynamic>).cast<Map<String, dynamic>>();
         setState(() => _searchResults = results);
       }
     } catch (_) {
@@ -661,7 +682,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     // Scroll to approximate position.
     final idx = _messages.indexWhere((m) => m.ts == ts);
     if (idx >= 0 && _scrollController.hasClients) {
-      final approx = (idx * 90.0).clamp(0.0, _scrollController.position.maxScrollExtent);
+      final approx =
+          (idx * 90.0).clamp(0.0, _scrollController.position.maxScrollExtent);
       _scrollController.animateTo(
         approx,
         duration: const Duration(milliseconds: 400),
@@ -678,10 +700,13 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SelectionArea(child: Column(
+    return SelectionArea(
+        child: Column(
       children: [
         // ── Pipeline state banner ─────────────────────────────────────
-        if (_pipelineState != null && _pipelineState != 'replied' && !_showThinking)
+        if (_pipelineState != null &&
+            _pipelineState != 'replied' &&
+            !_showThinking)
           _PipelineBanner(state: _pipelineState!, sentAt: _lastSentAt),
 
         // ── Idle / blur nudge banner ──────────────────────────────────
@@ -701,8 +726,12 @@ class _ConversationScreenState extends State<ConversationScreen>
                   ? _EmptyState()
                   : ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      itemCount: _messages.length + _draftBatch.length + (_showThinking ? 1 : 0) + 1,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 16),
+                      itemCount: _messages.length +
+                          _draftBatch.length +
+                          (_showThinking ? 1 : 0) +
+                          1,
                       itemBuilder: (ctx, i) {
                         if (i < _messages.length) {
                           return _MessageBubble(
@@ -717,9 +746,11 @@ class _ConversationScreenState extends State<ConversationScreen>
                             onRemove: () => _removeDraft(draftIndex),
                           );
                         }
-                        final postDraft = i - _messages.length - _draftBatch.length;
+                        final postDraft =
+                            i - _messages.length - _draftBatch.length;
                         if (_showThinking && postDraft == 0) {
-                          return _ThinkingBubble(since: _thinkingStart ?? DateTime.now());
+                          return _ThinkingBubble(
+                              since: _thinkingStart ?? DateTime.now());
                         }
                         // Bottom spacer: non-zero only during scroll-on-send.
                         return SizedBox(height: _bottomSpacer);
@@ -750,18 +781,23 @@ class _ConversationScreenState extends State<ConversationScreen>
                     child: GestureDetector(
                       onTap: _jumpToBottom,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                            BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: Offset(0, 2)),
                           ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.arrow_downward, color: Colors.white, size: 14),
+                            const Icon(Icons.arrow_downward,
+                                color: Colors.white, size: 14),
                             const SizedBox(width: 5),
                             Text(
                               '$_unreadCount new',
@@ -818,6 +854,7 @@ class _ConversationScreenState extends State<ConversationScreen>
 
 class _Message {
   final String from;
+  final String? speaker;
   final String ts;
   final String body;
   final String? source;
@@ -830,6 +867,7 @@ class _Message {
 
   const _Message({
     required this.from,
+    this.speaker,
     required this.ts,
     required this.body,
     this.source,
@@ -844,6 +882,7 @@ class _Message {
     final img = j['image'] as Map<String, dynamic>?;
     return _Message(
       from: (j['from'] as String?) ?? 'mike',
+      speaker: j['speaker'] as String?,
       ts: (j['ts'] as String?) ?? '',
       body: (j['body'] as String?) ?? '',
       source: j['source'] as String?,
@@ -900,7 +939,8 @@ class _DraftBubble extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.primary.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
@@ -927,7 +967,8 @@ class _DraftBubble extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: theme.colorScheme.errorContainer,
               ),
-              child: Icon(Icons.close, size: 12, color: theme.colorScheme.error),
+              child:
+                  Icon(Icons.close, size: 12, color: theme.colorScheme.error),
             ),
           ),
           const SizedBox(width: 6),
@@ -980,8 +1021,13 @@ class _IdleBanner extends StatelessWidget {
           TextButton(
             onPressed: flushing ? null : onSend,
             child: flushing
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Send', style: TextStyle(color: Color(0xFF8B6914), fontWeight: FontWeight.bold)),
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Send',
+                    style: TextStyle(
+                        color: Color(0xFF8B6914), fontWeight: FontWeight.bold)),
           ),
           IconButton(
             onPressed: onDismiss,
@@ -1013,11 +1059,15 @@ class _PipelineBannerState extends State<_PipelineBanner> {
   @override
   void initState() {
     super.initState();
-    _elapsed = widget.sentAt != null ? DateTime.now().difference(widget.sentAt!).inSeconds : 0;
+    _elapsed = widget.sentAt != null
+        ? DateTime.now().difference(widget.sentAt!).inSeconds
+        : 0;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
         setState(() {
-          _elapsed = widget.sentAt != null ? DateTime.now().difference(widget.sentAt!).inSeconds : _elapsed + 1;
+          _elapsed = widget.sentAt != null
+              ? DateTime.now().difference(widget.sentAt!).inSeconds
+              : _elapsed + 1;
         });
       }
     });
@@ -1043,7 +1093,11 @@ class _PipelineBannerState extends State<_PipelineBanner> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.tealAccent)),
+          const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.tealAccent)),
           const SizedBox(width: 10),
           Text(
             '$label$elapsed',
@@ -1065,6 +1119,7 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMike = msg.from == 'mike';
+    final speaker = msg.speaker ?? (isMike ? 'Mike' : msg.from);
     final theme = Theme.of(context);
     final ts = _formatTs(msg.ts);
 
@@ -1079,8 +1134,8 @@ class _MessageBubble extends StatelessWidget {
             CircleAvatar(
               radius: 14,
               backgroundColor: theme.colorScheme.secondary,
-              child: const Text('D',
-                  style: TextStyle(
+              child: Text(speaker.isEmpty ? 'A' : speaker[0].toUpperCase(),
+                  style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: Colors.white)),
@@ -1091,8 +1146,7 @@ class _MessageBubble extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               constraints: const BoxConstraints(maxWidth: 480),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: highlighted
                     ? const Color(0xFFFFF59D)
@@ -1110,10 +1164,20 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
               child: Column(
-                crossAxisAlignment: isMike
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isMike ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
+                  if (!isMike) ...[
+                    Text(
+                      speaker,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                  ],
                   if (msg.imageData != null) ...[
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
@@ -1167,10 +1231,12 @@ class _MessageBubble extends StatelessWidget {
                             color: highlighted
                                 ? const Color(0xFF555555)
                                 : isMike
-                                    ? theme.colorScheme.onPrimary.withOpacity(0.6)
-                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                                    ? theme.colorScheme.onPrimary
+                                        .withOpacity(0.6)
+                                    : theme.colorScheme.onSurfaceVariant
+                                        .withOpacity(0.5)),
                       ),
-                      if (isMike && msg.sentLocally) ...[  
+                      if (isMike && msg.sentLocally) ...[
                         const SizedBox(width: 4),
                         Text(
                           '✓ Sent',
@@ -1401,7 +1467,8 @@ class _InputBar extends StatelessWidget {
                           shape: BoxShape.circle,
                           color: theme.colorScheme.errorContainer,
                         ),
-                        child: Icon(Icons.close, size: 12, color: theme.colorScheme.error),
+                        child: Icon(Icons.close,
+                            size: 12, color: theme.colorScheme.error),
                       ),
                     ),
                   ),
@@ -1441,7 +1508,9 @@ class _InputBar extends StatelessWidget {
                     child: TextField(
                       controller: controller,
                       decoration: InputDecoration(
-                        hintText: pendingImage != null ? 'Add a caption…' : 'Message Dee…',
+                        hintText: pendingImage != null
+                            ? 'Add a caption…'
+                            : 'Message Dee…',
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -1536,34 +1605,36 @@ class _DualSendButtonState extends State<_DualSendButton> {
                   child: CircularProgressIndicator(strokeWidth: 2))
               // FIX: send-arrow collision — enforce 44dp minimum tap target
               : ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  constraints:
+                      const BoxConstraints(minWidth: 44, minHeight: 44),
                   child: GestureDetector(
-                  key: const ValueKey('send-now'),
-                  onTap: widget.onSendNow,
-                  onLongPress: _onLongPress,
-                  onLongPressStart: (_) => setState(() => _pressing = true),
-                  onLongPressEnd: (_) => setState(() => _pressing = false),
-                  onLongPressCancel: () => setState(() => _pressing = false),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      decoration: BoxDecoration(
-                        color: _pressing
-                            ? theme.colorScheme.tertiary.withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.send,
-                        size: 20,
-                        color: _pressing
-                            ? theme.colorScheme.tertiary
-                            : theme.colorScheme.onSurface,
+                    key: const ValueKey('send-now'),
+                    onTap: widget.onSendNow,
+                    onLongPress: _onLongPress,
+                    onLongPressStart: (_) => setState(() => _pressing = true),
+                    onLongPressEnd: (_) => setState(() => _pressing = false),
+                    onLongPressCancel: () => setState(() => _pressing = false),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        decoration: BoxDecoration(
+                          color: _pressing
+                              ? theme.colorScheme.tertiary
+                                  .withValues(alpha: 0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.send,
+                          size: 20,
+                          color: _pressing
+                              ? theme.colorScheme.tertiary
+                              : theme.colorScheme.onSurface,
+                        ),
                       ),
                     ),
                   ),
-                ),
                 ),
     );
   }
@@ -1683,7 +1754,8 @@ class _SearchOverlay extends StatelessWidget {
                           ? Center(
                               child: Text(
                                 'Search your Pulse conversation.',
-                                style: TextStyle(color: theme.colorScheme.outline),
+                                style:
+                                    TextStyle(color: theme.colorScheme.outline),
                               ),
                             )
                           : ListView.separated(
@@ -1693,7 +1765,8 @@ class _SearchOverlay extends StatelessWidget {
                                   Divider(height: 1, color: theme.dividerColor),
                               itemBuilder: (ctx, i) {
                                 final r = results[i];
-                                return _SearchResultTile(result: r, onTap: onResultTap);
+                                return _SearchResultTile(
+                                    result: r, onTap: onResultTap);
                               },
                             ),
             ),
@@ -1719,7 +1792,8 @@ class _SearchResultTile extends StatelessWidget {
     final ts = result['timestamp'] as String? ?? '';
     final isMike = source == 'mike';
     final label = isMike ? 'You' : 'Dee';
-    final labelColor = isMike ? theme.colorScheme.primary : theme.colorScheme.secondary;
+    final labelColor =
+        isMike ? theme.colorScheme.primary : theme.colorScheme.secondary;
 
     // Format timestamp
     String formattedTs = '';
@@ -1777,7 +1851,8 @@ class _SearchResultTile extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: labelColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(8),

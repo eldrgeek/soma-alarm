@@ -25,10 +25,13 @@ android {
         applicationId = "org.esr.sidekick"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 26
+        // Meta Wearables Device Access Toolkit 0.8.0 requires Android 12.
+        minSdk = 31
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["mwdat_application_id"] = "0"
+        manifestPlaceholders["mwdat_client_token"] = "0"
     }
 
     buildTypes {
@@ -50,4 +53,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.meta.wearable:mwdat-core:0.8.0")
+    implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
 }

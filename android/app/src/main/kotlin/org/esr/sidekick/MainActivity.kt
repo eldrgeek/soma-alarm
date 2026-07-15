@@ -11,8 +11,11 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var metaGlassesBridge: MetaGlassesBridge? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        metaGlassesBridge = MetaGlassesBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.esr.sidekick/calendar")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -35,6 +38,12 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onDestroy() {
+        metaGlassesBridge?.dispose()
+        metaGlassesBridge = null
+        super.onDestroy()
     }
 
     private fun requestCalendarSync(): Boolean {

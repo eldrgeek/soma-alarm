@@ -9,6 +9,7 @@ import 'activity_screen.dart';
 import 'asks_banner.dart';
 import 'conversation_screen.dart';
 import 'health_screen.dart';
+import 'glasses_conversation_screen.dart';
 import 'jobs_screen.dart';
 import 'kanban_screen.dart';
 import 'reminders_screen.dart';
@@ -31,7 +32,8 @@ class WebShell extends StatefulWidget {
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex = 0; // 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
+  int _selectedIndex =
+      0; // 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
   final _searchTrigger = ValueNotifier<bool>(false);
 
   @override
@@ -73,53 +75,70 @@ class _WebShellState extends State<WebShell> {
         children: [
           // Pending cc hud-ask items — global, visible on every tab.
           const AsksBanner(),
-          Expanded(child: Stack(
-        children: [
-          screenStack,
-          Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              left: false,
-              right: false,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 8, top: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_selectedIndex == 1)
-                      SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: IconButton(
-                          icon: const Icon(Icons.search, size: 18),
-                          tooltip: 'Search conversation',
-                          onPressed: () {
-                            _searchTrigger.value = !_searchTrigger.value;
-                          },
+          Expanded(
+              child: Stack(
+            children: [
+              screenStack,
+              Positioned(
+                top: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  left: false,
+                  right: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedIndex == 1)
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: IconButton(
+                              icon: const Icon(Icons.headset_mic, size: 19),
+                              tooltip: 'Meta glasses conversation',
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const GlassesConversationScreen(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_selectedIndex == 1)
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: IconButton(
+                              icon: const Icon(Icons.search, size: 18),
+                              tooltip: 'Search conversation',
+                              onPressed: () {
+                                _searchTrigger.value = !_searchTrigger.value;
+                              },
+                            ),
+                          ),
+                        const VersionChip(),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: IconButton(
+                            icon: const Icon(Icons.info_outline, size: 18),
+                            tooltip: 'About',
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const AboutPage()),
+                            ),
+                          ),
                         ),
-                      ),
-                    const VersionChip(),
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: IconButton(
-                        icon: const Icon(Icons.info_outline, size: 18),
-                        tooltip: 'About',
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const AboutPage()),
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
-      )),
+            ],
+          )),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -224,8 +243,8 @@ class _QuickCaptureBarState extends State<_QuickCaptureBar> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
@@ -240,8 +259,7 @@ class _QuickCaptureBarState extends State<_QuickCaptureBar> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
-            top: BorderSide(
-                color: Theme.of(context).dividerColor, width: 1)),
+            top: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(

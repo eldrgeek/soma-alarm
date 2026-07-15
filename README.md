@@ -2,6 +2,8 @@
 
 Android (Flutter) calendar alarm + morning routine app for the SOMA stack.
 
+Pulse also includes a Meta Ray-Ban glasses voice bridge for conversations, strategic panels, and work dispatch across Mike's SOMA AI team. See [docs/META-GLASSES-MVP.md](docs/META-GLASSES-MVP.md).
+
 ## What it does
 
 - Reads on-device calendars (no Google API tokens — uses `device_calendar`).
@@ -29,6 +31,8 @@ Before the build/dev workflow can succeed on macOS, grant the relevant macOS acc
 These do not affect the Pixel install, but they unblock the surrounding SOMA dev tooling on the Mac. (The runtime Pixel permissions — Calendar read, notifications, exact-alarm — are requested by the app itself on first launch.)
 
 ## Build
+
+The Meta DAT dependency requires a GitHub classic PAT with `read:packages` in untracked `android/local.properties` as `github_token=...`; see the glasses MVP guide.
 
 ```bash
 flutter pub get

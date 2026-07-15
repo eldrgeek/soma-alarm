@@ -17,6 +17,28 @@ pluginManagement {
     }
 }
 
+val localProperties =
+    java.util.Properties().apply {
+        val localPropertiesFile = file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { load(it) }
+        }
+    }
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://maven.pkg.github.com/facebook/meta-wearables-dat-android")
+            credentials {
+                username = ""
+                password = System.getenv("GITHUB_TOKEN") ?: localProperties.getProperty("github_token")
+            }
+        }
+    }
+}
+
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.11.1" apply false
