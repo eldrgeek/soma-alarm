@@ -72,6 +72,17 @@
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false" />
 
+        <!-- tools/ai-bench.sh instrumentation hook only — not part of normal
+             app usage. exported=false blocks other apps; adb shell can still
+             reach it. See AiBenchReceiver.kt. -->
+        <receiver
+            android:name=".AiBenchReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.esr.sidekick.AI_BENCH_RUN" />
+            </intent-filter>
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

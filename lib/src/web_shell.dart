@@ -12,6 +12,7 @@ import 'health_screen.dart';
 import 'glasses_conversation_screen.dart';
 import 'jobs_screen.dart';
 import 'kanban_screen.dart';
+import 'on_device_chat_screen.dart';
 import 'reminders_screen.dart';
 import 'today_screen.dart';
 import 'version_chip.dart';
@@ -116,6 +117,23 @@ class _WebShellState extends State<WebShell> {
                               onPressed: () {
                                 _searchTrigger.value = !_searchTrigger.value;
                               },
+                            ),
+                          ),
+                        if (_selectedIndex == 1)
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.offline_bolt_outlined,
+                                size: 19,
+                              ),
+                              tooltip: 'On-device AI (offline, no relay)',
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const OnDeviceChatScreen(),
+                                ),
+                              ),
                             ),
                           ),
                         const VersionChip(),

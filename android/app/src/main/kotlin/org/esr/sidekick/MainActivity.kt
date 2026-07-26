@@ -12,10 +12,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var metaGlassesBridge: MetaGlassesBridge? = null
+    private var onDeviceAssistantBridge: OnDeviceAssistantBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         metaGlassesBridge = MetaGlassesBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        onDeviceAssistantBridge =
+            OnDeviceAssistantBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.esr.sidekick/calendar")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -43,6 +46,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         metaGlassesBridge?.dispose()
         metaGlassesBridge = null
+        onDeviceAssistantBridge?.dispose()
+        onDeviceAssistantBridge = null
         super.onDestroy()
     }
 

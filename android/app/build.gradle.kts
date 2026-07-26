@@ -55,4 +55,9 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.meta.wearable:mwdat-core:0.8.0")
     implementation("com.meta.wearable:mwdat-mockdevice:0.8.0")
+    // On-device AI chat (Pulse "on-device AI") — Gemini Nano via AICore.
+    // Called directly (not through the google_mlkit_genai_prompt pub.dev
+    // plugin — see lib/src/on_device_assistant.dart for why). minSdk 26,
+    // well under this app's minSdk 31.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 }

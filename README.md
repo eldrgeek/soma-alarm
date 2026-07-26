@@ -4,6 +4,8 @@ Android (Flutter) calendar alarm + morning routine app for the SOMA stack.
 
 Pulse also includes a Meta Ray-Ban glasses voice bridge for conversations, strategic panels, and work dispatch across Mike's SOMA AI team. See [docs/META-GLASSES-MVP.md](docs/META-GLASSES-MVP.md).
 
+Pulse also includes an on-device AI chat (v0, offline, no relay round-trip) — see [On-device AI chat](#on-device-ai-chat-v0-offline) below.
+
 ## What it does
 
 - Reads on-device calendars (no Google API tokens — uses `device_calendar`).
@@ -64,6 +66,69 @@ lib/
 android/                   # Android scaffold (manifest with all permissions)
 .github/workflows/         # APK CI
 ```
+
+## On-device AI chat (v0, offline)
+
+A chat screen (tap the lightning-bolt icon on the **Pulse** tab) backed by
+Google's ML Kit **GenAI Prompt API** — Gemini Nano running locally via
+AICore. No network call, no relay, works offline. Requires a device with
+AICore support (verified supported: Pixel 10 Pro XL, Android 16 / SDK 36,
+Tensor G5). On unsupported devices the screen shows an explanation instead
+of crashing — the rest of the app is unaffected either way.
+
+**Files:**
+- `lib/src/on_device_assistant.dart` — the `OnDeviceAssistant` seam +
+  `MlKitGenaiAssistant` implementation. A different on-device backend
+  (flutter_gemma, a LiteRT-LM `.task` model, etc.) can slot in later by
+  implementing the same interface — no UI changes needed.
+- `lib/src/on_device_chat_screen.dart` — the chat UI. Handles all four
+  feature states: unsupported platform, unavailable device, needs
+  model-download, and available/chatting.
+- `android/app/src/main/kotlin/org/esr/sidekick/GenaiInferenceClient.kt` —
+  Flutter-agnostic wrapper around `com.google.mlkit:genai-prompt`.
+- `android/app/src/main/kotlin/org/esr/sidekick/OnDeviceAssistantBridge.kt` —
+  the Flutter platform channel (method + 2 event channels) wrapping the
+  client above.
+- `android/app/src/main/kotlin/org/esr/sidekick/AiBenchReceiver.kt` — a
+  debug-only broadcast receiver used only by `tools/ai-bench.sh` (see below).
+
+**Why a hand-rolled platform channel, not the `google_mlkit_genai_prompt`
+pub.dev plugin:** that plugin's native `runInference` is a hardcoded stub
+that always errors (`"Prompt API inference not yet fully implemented"`) and
+its `runInferenceStreaming` isn't wired up at all, as of the published 0.2.0
+/ develop branch (verified by reading its Kotlin source directly,
+2026-07-26). We call `com.google.mlkit:genai-prompt:1.0.0-beta2` ourselves —
+same pattern as the existing `MetaGlassesBridge.kt` — and get real token
+streaming in the process. Full rationale in the doc comment at the top of
+`lib/src/on_device_assistant.dart`.
+
+**Design constraint (enforced in code comments at every layer):** inference
+is strictly foreground and on-demand. Nothing here is registered with
+WorkManager's existing 15-min calendar poll (`lib/src/background.dart`); the
+native model handle is created lazily per screen visit and closed when the
+screen closes or `tools/ai-bench.sh`'s scripted run finishes. No background
+inference, ever.
+
+### Battery/thermal/memory benchmark — `tools/ai-bench.sh`
+
+Run **only** with the Pixel attached over USB, unlocked, and not in active
+use — it drives real on-device inference in a loop:
+
+```bash
+tools/ai-bench.sh                          # defaults: 3 prompts x 3 rounds
+tools/ai-bench.sh --prompts "a|b|c" --repeat 5 --out /tmp/report.md
+```
+
+It refuses to run with no device attached (or with more than one attached —
+set `ANDROID_SERIAL` to disambiguate). It unplugs + resets battery stats,
+fires the scripted prompt loop via the `AI_BENCH_RUN` broadcast (received by
+`AiBenchReceiver.kt`, which calls `GenaiInferenceClient` directly — the chat
+UI doesn't need to be open), polls `dumpsys meminfo` for peak PSS while
+watching logcat for completion, then collects
+`dumpsys batterystats --charged org.esr.sidekick`, `dumpsys thermalservice`,
+and a final `dumpsys meminfo` snapshot into a markdown report under
+`tools/ai-bench-reports/`. It always restores battery state
+(`dumpsys battery reset`) on exit, including on early failure.
 
 ## Open work
 
