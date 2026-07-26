@@ -24,10 +24,16 @@
 #      early exit, via a trap.
 #
 # Usage:
-#   tools/ai-bench.sh [--prompts "a|b|c"] [--repeat N] [--out PATH] [--max-wait SECONDS]
+#   tools/ai-bench.sh [--prompts "a|b|c"] [--repeat N] [--out PATH] [--max-wait SECONDS] [--canary-timeout SECONDS]
 #
 # Requires: the release APK already installed on the attached device
 # (org.esr.sidekick) — this script does not build or install anything.
+#
+# DELIVERY NOTE (2026-07-26 lesson, see tools/lib/ai-bench-common.sh): the
+# broadcast is fired with FLAG_RECEIVER_FOREGROUND and this script waits for
+# the receiver's own "ai-bench: starting" log line before trusting the run —
+# `am broadcast` reporting "completed" is not proof a cached/frozen app
+# actually received it.
 
 set -euo pipefail
 
@@ -38,6 +44,7 @@ REPEAT=3
 OUT=""
 POLL_INTERVAL=2
 MAX_WAIT_SECONDS=600
+CANARY_TIMEOUT_SECONDS=20
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --repeat) REPEAT="$2"; shift 2 ;;
     --out) OUT="$2"; shift 2 ;;
     --max-wait) MAX_WAIT_SECONDS="$2"; shift 2 ;;
+    --canary-timeout) CANARY_TIMEOUT_SECONDS="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       exit 0
@@ -54,6 +62,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=tools/lib/ai-bench-common.sh
+source "$REPO_ROOT/tools/lib/ai-bench-common.sh"
 
 if ! command -v adb >/dev/null 2>&1; then
   echo "ai-bench: adb not found on PATH. Aborting." >&2
@@ -100,7 +110,14 @@ adb logcat -c
 
 PROMPT_COUNT="$(echo "$PROMPTS" | tr '|' '\n' | grep -c . || true)"
 echo "ai-bench: firing broadcast — $PROMPT_COUNT prompt(s) x $REPEAT round(s)"
-adb shell am broadcast -a "$ACTION" -p "$PKG" --es prompts "$PROMPTS" --ei repeat "$REPEAT"
+ai_bench_broadcast "$PKG" "$ACTION" "$PROMPTS" "$REPEAT"
+
+echo "ai-bench: waiting up to ${CANARY_TIMEOUT_SECONDS}s for delivery canary ('ai-bench: starting')"
+if ! wait_for_canary "$CANARY_TIMEOUT_SECONDS"; then
+  canary_failure_message "$PKG" >&2
+  exit 1
+fi
+echo "ai-bench: canary confirmed — receiver is running, proceeding"
 
 echo "ai-bench: polling meminfo for peak PSS while the run is in flight (max ${MAX_WAIT_SECONDS}s)"
 PEAK_PSS_KB=0

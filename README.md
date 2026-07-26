@@ -130,6 +130,46 @@ and a final `dumpsys meminfo` snapshot into a markdown report under
 `tools/ai-bench-reports/`. It always restores battery state
 (`dumpsys battery reset`) on exit, including on early failure.
 
+Both this script and the interview script below fire the `AI_BENCH_RUN`
+broadcast with `-f 0x10000000` (`FLAG_RECEIVER_FOREGROUND`) and then wait for
+the receiver's own `"ai-bench: starting"` log line before trusting the run.
+`am broadcast` reporting `Broadcast completed: result=0` is **not** proof of
+delivery to a cached/frozen app process — see
+`tools/lib/ai-bench-common.sh` for the full writeup (2026-07-26 lesson from
+the first, null-result interview attempt).
+
+### Capability interview — `tools/gemma-interview.sh`
+
+Unattended run of a fixed probe set through the same `AI_BENCH_RUN` hook,
+producing a markdown transcript with full reassembled response text and
+per-probe latency:
+
+```bash
+tools/gemma-interview.sh                          # probes from tools/gemma-probes.txt
+tools/gemma-interview.sh --probes /tmp/other.txt --out /tmp/report.md
+```
+
+- Probes live in `tools/gemma-probes.txt` — one self-contained prompt per
+  line (blank lines and `#` comments ignored), editable without touching the
+  script. Covers self-description, board narration (the core "tell Mike
+  what matters right now" job), intent classification (the four-way
+  `ANSWER_FROM_CACHE` / `NEEDS_REACHBACK` / `ACT_ON_ITEM` / `ESCALATE`
+  router from `SOMA/specs/pulse-gemma-chief-of-staff-v0.md`), structured/JSON
+  output, simulated multi-turn coherence, instruction discipline / prompt
+  injection resistance, a long-context needle test, summarization,
+  tone/rewriting, reasoning, and refusal behavior.
+- Reassembles full response text from the chunked
+  `ai-bench-text[n][chunk/total]` logcat lines `AiBenchReceiver.kt` emits,
+  using `adb logcat -v long` so a chunk containing embedded newlines (e.g. a
+  list in the response) isn't silently truncated to its first physical line.
+- Grows the logcat buffer to 16M and clears it before every probe so long
+  responses can't be evicted.
+- **Safety rule:** before every probe it checks `dumpsys window | grep
+  mCurrentFocus`; if `org.esr.sidekick` is in the foreground it aborts the
+  whole run rather than contending with a live session Mike might be in.
+- Writes a markdown transcript to `tools/interview-reports/`, exits nonzero
+  if any probe failed/timed out/couldn't be delivered.
+
 ## Open work
 
 - Live-device testing on Mike's Pixel (permissions, Doze behavior, snooze loop, boot-receiver re-scheduling).
