@@ -76,6 +76,7 @@ class AiBenchReceiver : BroadcastReceiver() {
                                 "ai-bench: [$n/$total] ${elapsed}ms, ${text.length} chars back " +
                                     "for: ${prompt.take(60)}",
                             )
+                            logFullText(n, text)
                         } catch (e: Throwable) {
                             Log.e(TAG, "ai-bench: [$n/$total] failed for: ${prompt.take(60)}", e)
                         }
@@ -86,6 +87,26 @@ class AiBenchReceiver : BroadcastReceiver() {
                 inference.close()
                 pending.finish()
             }
+        }
+    }
+
+    /**
+     * Logs the FULL response text for prompt [n], chunked to dodge logcat's
+     * per-line size cap (~4076 bytes) and its ring-buffer/`-d` line cap.
+     * Each line is prefixed `ai-bench-text[n][chunk/total] ` so a script can
+     * reassemble the original string by filtering on tag+prefix, sorting by
+     * chunk index, and concatenating.
+     */
+    private fun logFullText(n: Int, text: String) {
+        val chunkSize = 3000
+        if (text.isEmpty()) {
+            Log.i(TAG, "ai-bench-text[$n][1/1] ")
+            return
+        }
+        val chunks = text.chunked(chunkSize)
+        val total = chunks.size
+        chunks.forEachIndexed { idx, chunk ->
+            Log.i(TAG, "ai-bench-text[$n][${idx + 1}/$total] $chunk")
         }
     }
 }
