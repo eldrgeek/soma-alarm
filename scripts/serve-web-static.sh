@@ -26,5 +26,25 @@ if [ -n "$EXISTING" ]; then
   sleep 1
 fi
 
-echo "[$(date)] serving $BUILD_DIR on :$PORT"
-exec /opt/homebrew/bin/python3 -m http.server $PORT --directory "$BUILD_DIR"
+# Loopback only (Locke review, 2026-10-16). `python3 -m http.server` binds
+# every interface, so anyone on the same Wi-Fi could load Pulse. Its CLI takes
+# one --bind address, so this inline server listens on 127.0.0.1 and on ::1
+# (browsers resolve "localhost" to ::1 first).
+echo "[$(date)] serving $BUILD_DIR on 127.0.0.1:$PORT and [::1]:$PORT"
+exec /opt/homebrew/bin/python3 - "$BUILD_DIR" "$PORT" <<'PY'
+import functools, http.server, socket, sys, threading
+
+directory, port = sys.argv[1], int(sys.argv[2])
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+
+class V6Server(http.server.ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+v4 = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+try:
+    v6 = V6Server(("::1", port), handler)
+    threading.Thread(target=v6.serve_forever, daemon=True).start()
+except OSError as e:
+    print(f"[::1]:{port} unavailable ({e}); IPv4 loopback only", flush=True)
+v4.serve_forever()
+PY
