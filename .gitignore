@@ -47,3 +47,6 @@ app.*.map.json
 # Node / Playwright
 node_modules/
 package-lock.json
+
+# Claude Code session worktrees (local only; never track them as gitlinks)
+.claude/worktrees/
