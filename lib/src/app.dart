@@ -6,6 +6,7 @@ import '../theme/theme_provider.dart';
 import 'alarm_action_screen.dart';
 import 'alarms.dart';
 import 'home_page.dart';
+import 'pages.dart';
 import 'web_shell.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -17,8 +18,9 @@ void navigateToAlarmAction(AlarmRecord rec) {
 }
 
 void navigateToHealthTab(String component) {
-  // Tab index 5 = Health
-  WebShell.requestTab(5);
+  // By id, not index — Health may sit anywhere in the nav, or be switched off
+  // entirely (in which case the shell opens it as a route).
+  WebShell.requestPage(PulsePages.health);
 }
 
 class SomaAlarmApp extends StatelessWidget {

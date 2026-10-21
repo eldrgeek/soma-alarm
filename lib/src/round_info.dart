@@ -1,11 +1,12 @@
 // Hand-maintained per round. Bump when starting a new round.
 // Convention: round number + 1-line title, then a longer description.
 
-const int kRoundNumber = 9;
-const String kRoundTitle = 'r9 — in-app OTA update flow';
+const int kRoundNumber = 10;
+const String kRoundTitle = 'r10 — simplified nav';
 const String kRoundDescription = '''
-r9 — In-app OTA update flow. About page checks Tailscale OTA server on open,
-shows "Update available" with one-tap install. VersionChip shows ⬆ badge when
-update is ready. publish-ota.sh automates APK build → server publish.
-Builds on r8 (reminders + personal health tabs).
+r10 — Simplified nav. Pulse opens on three pages: Pulse Zero (the live board,
+embedded), Gemma (on-device AI, offline, with a one-tap hand-off to the team),
+and Dee. The other six screens are unchanged and one switch away under
+About > Pages. r9 shipped the in-app OTA flow; the OTA channel it points at was
+restored the same day.
 ''';

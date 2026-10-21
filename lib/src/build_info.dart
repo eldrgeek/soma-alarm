@@ -1,7 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Regenerated during flutter build.
 
-const String kBuildGitShaFull = 'c57a8f2fea6d09d8edeb45eb8fb443ba76e025f3';
-const String kBuildGitShaShort = 'c57a8f2';
-const String kBuildCommitSubject = 'feat(asks): global AsksBanner replaces Mac HUD overlay for cc hud-ask';
-const String kBuildTime = '2026-06-10T20:49:31Z';
+const String kBuildGitShaFull = 'b6f2af635c4c0b9c92c4ab743dc39675db46b869';
+const String kBuildGitShaShort = 'b6f2af6';
+const String kBuildCommitSubject = 'fix(ai-bench): harden broadcast delivery + add unattended Gemma interview';
+const String kBuildTime = '2026-07-29T18:51:39Z';

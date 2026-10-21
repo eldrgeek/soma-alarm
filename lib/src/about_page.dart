@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import 'build_info.dart';
 import 'ota_service.dart';
+import 'pages.dart';
 import 'round_info.dart';
 import 'settings.dart';
 
@@ -26,6 +27,9 @@ class _AboutPageState extends State<AboutPage> {
   String _tailscale = 'checking…';
   String _roundNotes = '';
 
+  /// Which pages are switched on. Null until loaded.
+  List<String>? _enabledPages;
+
   // OTA
   _OtaState _otaState = _OtaState.checking;
   OtaManifest? _manifest;
@@ -42,14 +46,35 @@ class _AboutPageState extends State<AboutPage> {
     final pkg = await PackageInfo.fromPlatform();
     final host = await Settings.yeshieHost();
     final ts = _classifyHost(host);
+    final pages = await PulsePagePrefs.enabled();
     if (!mounted) return;
     setState(() {
       _pkg = pkg;
       _host = host;
       _tailscale = ts;
       _roundNotes = kRoundDescription.trim();
+      _enabledPages = pages;
     });
     if (!kIsWeb) _checkOta(pkg);
+  }
+
+  Future<void> _togglePage(String id, bool on) async {
+    final ok = await PulsePagePrefs.setPageEnabled(id, on);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Keep at least one page turned on.')),
+      );
+      return;
+    }
+    final pages = await PulsePagePrefs.enabled();
+    if (mounted) setState(() => _enabledPages = pages);
+  }
+
+  Future<void> _restoreDefaultPages() async {
+    await PulsePagePrefs.restoreDefaults();
+    final pages = await PulsePagePrefs.enabled();
+    if (mounted) setState(() => _enabledPages = pages);
   }
 
   Future<void> _checkOta(PackageInfo pkg) async {
@@ -128,6 +153,8 @@ class _AboutPageState extends State<AboutPage> {
           _row('Tailscale', _tailscale),
           _row('Platform', kIsWeb ? 'web' : 'mobile'),
           const SizedBox(height: 16),
+          _buildPagesSection(context),
+          const SizedBox(height: 16),
           if (!kIsWeb) ...[
             _buildOtaSection(context),
             const SizedBox(height: 16),
@@ -140,6 +167,69 @@ class _AboutPageState extends State<AboutPage> {
             style: const TextStyle(height: 1.35),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Page switches. Every screen Pulse has ever had is listed here — the
+  /// simplification hid pages from the nav, it did not remove them.
+  Widget _buildPagesSection(BuildContext context) {
+    final enabled = _enabledPages;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Pages',
+                      style: Theme.of(context).textTheme.titleSmall),
+                ),
+                TextButton(
+                  onPressed: enabled == null ? null : _restoreDefaultPages,
+                  child: const Text('Defaults'),
+                ),
+              ],
+            ),
+            Text(
+              'Choose what appears in the bottom bar. Nothing is deleted — '
+              'switch a page back on any time.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Theme.of(context).hintColor),
+            ),
+            const SizedBox(height: 4),
+            if (enabled == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else
+              for (final page in PulsePages.all)
+                SwitchListTile(
+                  value: enabled.contains(page.id),
+                  onChanged: (v) => _togglePage(page.id, v),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  secondary: Icon(page.icon, size: 20),
+                  title: Text(page.label),
+                  subtitle: Text(
+                    page.blurb,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }

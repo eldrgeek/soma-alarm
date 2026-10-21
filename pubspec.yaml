@@ -1,7 +1,7 @@
 name: sidekick
 description: "Sidekick (Pixel) — calendar alarm + morning routine. User-facing brand: Pulse."
 publish_to: 'none'
-version: 0.2.9+19
+version: 0.2.10+22
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -24,6 +24,8 @@ dependencies:
   provider: ^6.1.2
   flutter_markdown: ^0.7.3
   url_launcher: ^6.3.0
+  # Pulse Zero tab embeds the deployed board rather than re-rendering it.
+  webview_flutter: ^4.10.0
   package_info_plus: ^8.0.0
   image_picker: ^1.1.2
   open_filex: ^4.7.0

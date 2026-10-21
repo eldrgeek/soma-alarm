@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'on_device_assistant.dart';
+import 'settings.dart';
 
 /// On-device AI chat (v0) — talks to Gemini Nano through the ML Kit GenAI
 /// Prompt API / AICore. No network call, no relay round-trip, works offline.
@@ -43,6 +46,52 @@ class _OnDeviceChatScreenState extends State<OnDeviceChatScreen> {
   StreamSubscription<String>? _askSub;
   StreamSubscription<AssistantDownloadEvent>? _downloadSub;
   String? _error;
+  bool _sendingToTeam = false;
+
+  /// Hand the conversation to the team.
+  ///
+  /// This is the ONLY network path on this screen, and it is explicit and
+  /// user-initiated — the offline guarantee in the class doc still holds for
+  /// inference itself. Nothing leaves the phone until Mike taps this.
+  Future<void> _sendThreadToTeam() async {
+    if (_turns.isEmpty || _sendingToTeam) return;
+    setState(() => _sendingToTeam = true);
+    try {
+      final transcript = _turns
+          .map((t) => '${t.role == 'you' ? 'Mike' : 'Gemma'}: ${t.text.trim()}')
+          .join('\n\n');
+      final base = await Settings.yeshieHost();
+      final resp = await http
+          .post(
+            Uri.parse('$base/pulse/capture'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'text': 'Thread from Gemma (on-device):\n\n$transcript',
+              'source': 'gemma-on-device',
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (!mounted) return;
+      if (resp.statusCode == 200) {
+        _toast('Sent to the team');
+      } else {
+        _toast('Send failed: HTTP ${resp.statusCode}', isError: true);
+      }
+    } catch (e) {
+      if (mounted) _toast('Send failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _sendingToTeam = false);
+    }
+  }
+
+  void _toast(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : null,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -160,8 +209,20 @@ class _OnDeviceChatScreenState extends State<OnDeviceChatScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('On-device AI'),
+        title: const Text('Gemma'),
         actions: [
+          IconButton(
+            icon: _sendingToTeam
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.forward_to_inbox),
+            tooltip: 'Send this thread to the team',
+            onPressed:
+                _turns.isEmpty || _sendingToTeam ? null : _sendThreadToTeam,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Re-check availability',

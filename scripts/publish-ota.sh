@@ -74,20 +74,32 @@ ROUND_NOTES=$(grep -A5 'kRoundDescription' lib/src/round_info.dart | grep -v 'kR
 
 echo "==> Version: $VERSION  SHA256: $SHA  Size: $SIZE"
 
-cat > "$OTA_DIR/latest.json" << EOF
-{
-  "version": "$VERSION",
-  "version_name": "$VERSION_NAME",
-  "build_number": $BUILD_NUMBER,
-  "commit": "$COMMIT",
-  "built_at": "$BUILT_AT",
-  "size": $SIZE,
-  "sha256": "$SHA",
-  "url": "/pulse.apk",
-  "release_notes": "$ROUND_NOTES"
+# Build the manifest with a real JSON encoder. The release notes come from
+# round_info.dart prose and routinely contain double quotes; interpolating them
+# straight into a heredoc produced invalid JSON, which made OtaService's
+# jsonDecode throw and silently killed the in-app update check.
+ROUND_NOTES="$ROUND_NOTES" VERSION="$VERSION" VERSION_NAME="$VERSION_NAME" \
+BUILD_NUMBER="$BUILD_NUMBER" COMMIT="$COMMIT" BUILT_AT="$BUILT_AT" \
+SIZE="$SIZE" SHA="$SHA" python3 -c '
+import json, os
+m = {
+    "version":       os.environ["VERSION"],
+    "version_name":  os.environ["VERSION_NAME"],
+    "build_number":  int(os.environ["BUILD_NUMBER"]),
+    "commit":        os.environ["COMMIT"],
+    "built_at":      os.environ["BUILT_AT"],
+    "size":          int(os.environ["SIZE"]),
+    "sha256":        os.environ["SHA"],
+    "url":           "/pulse.apk",
+    "release_notes": os.environ["ROUND_NOTES"],
 }
-EOF
-echo "==> Wrote $OTA_DIR/latest.json"
+print(json.dumps(m, indent=2))
+' > "$OTA_DIR/latest.json"
+
+# Fail loudly rather than publishing a manifest the app cannot parse.
+python3 -m json.tool "$OTA_DIR/latest.json" > /dev/null \
+  || { echo "ERROR: generated latest.json is not valid JSON" >&2; exit 1; }
+echo "==> Wrote $OTA_DIR/latest.json (validated)"
 
 cat > "$OTA_DIR/index.html" << EOF
 <!DOCTYPE html>
@@ -118,6 +130,39 @@ cat > "$OTA_DIR/index.html" << EOF
 </html>
 EOF
 echo "==> Wrote $OTA_DIR/index.html"
+
+# ---------------------------------------------------------------------------
+# Publish to the VPS. This is the server the app actually reads: commit 2021893
+# moved OtaService's _otaBase from the Mac's tailnet address to
+# https://vpsmikewolf.duckdns.org/pulse-ota, but this script kept writing only
+# to $OTA_DIR on the Mac. Consumer and publisher pointed at different hosts, so
+# every in-app update check 404'd. Keep this step in lockstep with _otaBase.
+# ---------------------------------------------------------------------------
+VPS_HOST="${PULSE_OTA_VPS_HOST:-vps}"
+VPS_OTA_DIR="/var/www/pulse-ota"
+
+if [[ "${SKIP_VPS:-false}" == true ]]; then
+  echo "==> Skipping VPS publish (SKIP_VPS=true)."
+elif ssh -o BatchMode=yes -o ConnectTimeout=15 "$VPS_HOST" true 2>/dev/null; then
+  ssh -o BatchMode=yes "$VPS_HOST" "sudo install -d -o ubuntu -g ubuntu -m 755 $VPS_OTA_DIR"
+  rsync -a "$OTA_DIR/pulse.apk" "$OTA_DIR/latest.json" "$OTA_DIR/index.html" \
+    "$VPS_HOST:$VPS_OTA_DIR/"
+  echo "==> Published to $VPS_HOST:$VPS_OTA_DIR"
+
+  # Verify what the phone will actually fetch, not just what we uploaded.
+  REMOTE_BUILD=$(curl -fsS --max-time 20 \
+    https://vpsmikewolf.duckdns.org/pulse-ota/latest.json | python3 -c \
+    'import json,sys; print(json.load(sys.stdin)["build_number"])' 2>/dev/null || echo "")
+  if [[ "$REMOTE_BUILD" == "$BUILD_NUMBER" ]]; then
+    echo "==> VERIFIED: OTA endpoint serves build $REMOTE_BUILD"
+  else
+    echo "WARNING: OTA endpoint reports build '$REMOTE_BUILD', expected '$BUILD_NUMBER'" >&2
+  fi
+else
+  echo "WARNING: cannot reach VPS '$VPS_HOST' — phone will NOT see this build." >&2
+  echo "         Re-run once connectivity is back, or set SKIP_VPS=true to silence." >&2
+fi
+
 echo ""
 echo "Done. OTA server should serve the new build immediately."
 echo "Device can self-update via About → Install update."

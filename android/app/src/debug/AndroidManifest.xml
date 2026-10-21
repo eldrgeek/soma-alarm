@@ -4,4 +4,25 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application>
+        <!-- Instrumentation hook for tools/ai-bench.sh and
+             tools/gemma-interview.sh. DEBUG BUILDS ONLY — it is absent from
+             release builds by construction, because it lets any caller drive
+             real on-device inference.
+
+             exported="true" is REQUIRED and is the whole point of moving it
+             here. `adb shell am broadcast` runs as the shell uid (2000), not
+             the app's uid, so an exported="false" receiver is unreachable from
+             adb no matter what flags the sender sets — which is exactly the bug
+             that made every interview probe fail from 2026-07-26 to 2026-08-10.
+             Keeping it debug-only is what makes exported="true" acceptable. -->
+        <receiver
+            android:name=".AiBenchReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="org.esr.sidekick.AI_BENCH_RUN" />
+            </intent-filter>
+        </receiver>
+    </application>
 </manifest>

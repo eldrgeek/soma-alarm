@@ -27,7 +27,7 @@ Future<void> main() async {
     AlarmService.instance.onNotificationTap = navigateToAlarmAction;
     AlarmService.instance.onHealthNotificationTap = navigateToHealthTab;
     // Asks render in the global AsksBanner; opening the app is enough.
-    AlarmService.instance.onAskNotificationTap = (_) => WebShell.requestTab(0);
+    AlarmService.instance.onAskNotificationTap = (_) => WebShell.requestHome();
   }
   final launchRec =
       kIsWeb ? null : await AlarmService.instance.getLaunchAlarmRecord();

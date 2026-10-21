@@ -5,16 +5,10 @@ import 'package:http/http.dart' as http;
 
 import 'settings.dart';
 import 'about_page.dart';
-import 'activity_screen.dart';
 import 'asks_banner.dart';
-import 'conversation_screen.dart';
-import 'health_screen.dart';
 import 'glasses_conversation_screen.dart';
-import 'jobs_screen.dart';
-import 'kanban_screen.dart';
 import 'on_device_chat_screen.dart';
-import 'reminders_screen.dart';
-import 'today_screen.dart';
+import 'pages.dart';
 import 'version_chip.dart';
 
 // Putoff items are re-homed to Reminders (category: self_deferred) via Track A.
@@ -23,30 +17,82 @@ import 'version_chip.dart';
 class WebShell extends StatefulWidget {
   const WebShell({super.key});
 
-  // Programmatically navigate to a tab (e.g., from a notification tap).
-  // Tab indices: 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
-  static void Function(int)? _navCallback;
-  static void requestTab(int tab) => _navCallback?.call(tab);
+  // Programmatically navigate to a page (e.g., from a notification tap).
+  //
+  // Takes a PulsePages id, NOT an index. Indices used to be hardcoded at call
+  // sites ("tab 5 = Health"); once the nav became user-configurable those
+  // constants pointed at whatever page happened to land in that slot.
+  static void Function(String)? _navCallback;
+  static void requestPage(String pageId) => _navCallback?.call(pageId);
+
+  /// Sentinel meaning "whatever page leads the nav". Used by callers that just
+  /// want the app foregrounded on its home surface and don't care which one.
+  static const String homePage = '__home__';
+  static void requestHome() => _navCallback?.call(homePage);
 
   @override
   State<WebShell> createState() => _WebShellState();
 }
 
 class _WebShellState extends State<WebShell> {
-  int _selectedIndex =
-      0; // 0=Today 1=Pulse 2=Jobs 3=Activity 4=Reminders 5=Health 6=Board
   final _searchTrigger = ValueNotifier<bool>(false);
+
+  List<PulsePage> _pages = const [];
+  String? _selectedId;
+  bool _loaded = false;
 
   @override
   void initState() {
     super.initState();
-    WebShell._navCallback = (tab) {
-      if (mounted) setState(() => _selectedIndex = tab);
+    _loadPages();
+    PulsePagePrefs.revision.addListener(_loadPages);
+    WebShell._navCallback = (pageId) {
+      if (!mounted) return;
+      if (pageId == WebShell.homePage) {
+        if (_pages.isNotEmpty) setState(() => _selectedId = _pages.first.id);
+        return;
+      }
+      final page = PulsePages.byId(pageId);
+      if (page == null) return;
+      if (_pages.any((p) => p.id == pageId)) {
+        setState(() => _selectedId = pageId);
+      } else {
+        // The page is switched off in About. Honour the request anyway by
+        // pushing it as a route — a disabled page should still be reachable
+        // when something (a notification, a deep link) asks for it by name.
+        _openAsRoute(page);
+      }
     };
+  }
+
+  Future<void> _loadPages() async {
+    final ids = await PulsePagePrefs.enabled();
+    if (!mounted) return;
+    final pages = PulsePages.resolve(ids);
+    setState(() {
+      _pages = pages;
+      _loaded = true;
+      // Keep the current page selected across a config change when possible.
+      if (_selectedId == null || !pages.any((p) => p.id == _selectedId)) {
+        _selectedId = pages.isEmpty ? null : pages.first.id;
+      }
+    });
+  }
+
+  void _openAsRoute(PulsePage page) {
+    final host = PulsePageHost(
+      isActive: true,
+      onRequestFocus: () {},
+      searchTrigger: _searchTrigger,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (ctx) => page.builder(ctx, host)),
+    );
   }
 
   @override
   void dispose() {
+    PulsePagePrefs.revision.removeListener(_loadPages);
     WebShell._navCallback = null;
     _searchTrigger.dispose();
     super.dispose();
@@ -54,20 +100,26 @@ class _WebShellState extends State<WebShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final selectedIndex =
+        _pages.indexWhere((p) => p.id == _selectedId).clamp(0, _pages.length);
+    final onDee = _selectedId == PulsePages.dee;
+
     final screenStack = IndexedStack(
-      index: _selectedIndex,
+      index: selectedIndex,
       children: [
-        const TodayScreen(),
-        ConversationScreen(
-          isActive: _selectedIndex == 1,
-          onRequestFocus: () => setState(() => _selectedIndex = 1),
-          searchTrigger: _searchTrigger,
-        ),
-        const JobsScreen(),
-        const ActivityScreen(),
-        const RemindersScreen(),
-        const HealthScreen(),
-        const KanbanScreen(),
+        for (final page in _pages)
+          page.builder(
+            context,
+            PulsePageHost(
+              isActive: page.id == _selectedId,
+              onRequestFocus: () => setState(() => _selectedId = page.id),
+              searchTrigger: _searchTrigger,
+            ),
+          ),
       ],
     );
 
@@ -92,7 +144,7 @@ class _WebShellState extends State<WebShell> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_selectedIndex == 1)
+                        if (onDee)
                           SizedBox(
                             width: 44,
                             height: 44,
@@ -107,7 +159,7 @@ class _WebShellState extends State<WebShell> {
                               ),
                             ),
                           ),
-                        if (_selectedIndex == 1)
+                        if (onDee)
                           SizedBox(
                             width: 44,
                             height: 44,
@@ -119,7 +171,7 @@ class _WebShellState extends State<WebShell> {
                               },
                             ),
                           ),
-                        if (_selectedIndex == 1)
+                        if (onDee)
                           SizedBox(
                             width: 44,
                             height: 44,
@@ -159,48 +211,24 @@ class _WebShellState extends State<WebShell> {
           )),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.today_outlined),
-            selectedIcon: Icon(Icons.today),
-            label: 'Today',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Pulse',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.work_outline),
-            selectedIcon: Icon(Icons.work),
-            label: 'Jobs',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.dynamic_feed_outlined),
-            selectedIcon: Icon(Icons.dynamic_feed),
-            label: 'Activity',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications),
-            label: 'Reminders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.monitor_heart_outlined),
-            selectedIcon: Icon(Icons.monitor_heart),
-            label: 'Health',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.view_kanban_outlined),
-            selectedIcon: Icon(Icons.view_kanban),
-            label: 'Board',
-          ),
-        ],
-      ),
+      // A single enabled page needs no chooser — drop the bar entirely.
+      bottomNavigationBar: _pages.length < 2
+          ? null
+          : NavigationBar(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (i) =>
+                  setState(() => _selectedId = _pages[i].id),
+              labelBehavior:
+                  NavigationDestinationLabelBehavior.onlyShowSelected,
+              destinations: [
+                for (final page in _pages)
+                  NavigationDestination(
+                    icon: Icon(page.icon),
+                    selectedIcon: Icon(page.selectedIcon),
+                    label: page.label,
+                  ),
+              ],
+            ),
     );
   }
 }

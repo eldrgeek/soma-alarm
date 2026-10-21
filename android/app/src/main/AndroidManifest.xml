@@ -72,16 +72,19 @@
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
             android:exported="false" />
 
-        <!-- tools/ai-bench.sh instrumentation hook only — not part of normal
-             app usage. exported=false blocks other apps; adb shell can still
-             reach it. See AiBenchReceiver.kt. -->
-        <receiver
-            android:name=".AiBenchReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="org.esr.sidekick.AI_BENCH_RUN" />
-            </intent-filter>
-        </receiver>
+        <!-- AiBenchReceiver (tools/ai-bench.sh + tools/gemma-interview.sh) is
+             declared in src/debug/AndroidManifest.xml ONLY — deliberately not
+             here. It used to live in this manifest with exported="false" and a
+             comment claiming "adb shell can still reach it". That was false:
+             `adb shell am broadcast` runs as the shell uid (2000), and a
+             non-exported component is only reachable from the app's OWN uid, so
+             every broadcast was silently dropped — `am broadcast` still prints
+             "Broadcast completed: result=0" while ActivityManager logs
+             "Enqueued broadcast ...: 0" receivers. Both the 2026-07-26 and
+             2026-08-10 interview runs scored 0/11 for this reason, and two
+             rounds of "delivery hardening" chased a timing bug that was never
+             there. Moved 2026-08-10; release builds now carry no inference hook
+             at all, which is also why it is not simply exported="true" here. -->
 
         <meta-data
             android:name="flutterEmbedding"
