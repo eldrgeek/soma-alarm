@@ -39,8 +39,8 @@ ThemeData get mikeSpecialTheme {
     inversePrimary: MikeSpecialColors.emberDeep,
   );
 
-  final bodyFont = GoogleFonts.spaceGrotesk;
-  final displayFont = GoogleFonts.fraunces;
+  const bodyFont = GoogleFonts.spaceGrotesk;
+  const displayFont = GoogleFonts.fraunces;
 
   final textTheme = TextTheme(
     displayLarge: displayFont(fontSize: 57, fontWeight: FontWeight.w900, color: MikeSpecialColors.ember, letterSpacing: -2),

@@ -272,8 +272,8 @@ class _KindBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: _color().withOpacity(0.15),
-        border: Border.all(color: _color().withOpacity(0.4)),
+        color: _color().withValues(alpha: 0.15),
+        border: Border.all(color: _color().withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(kind,

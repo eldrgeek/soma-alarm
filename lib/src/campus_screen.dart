@@ -16,7 +16,7 @@ class _Node {
   final String sublabel;
   final IconData icon;
   String? probeUrl; // null = static local node (not probeable)
-  _NodeState state;
+  _NodeState state = _NodeState.unknown;
   String? detail;
 
   _Node({
@@ -25,8 +25,6 @@ class _Node {
     required this.sublabel,
     required this.icon,
     this.probeUrl,
-    this.state = _NodeState.unknown,
-    this.detail,
   });
 }
 
@@ -182,7 +180,7 @@ class _CampusScreenState extends State<CampusScreen> {
     if (!mounted) return;
     final relayUri = Uri.parse(host);
     final screenpipeUrl =
-        relayUri.replace(port: 3030).toString() + '/health';
+        '${relayUri.replace(port: 3030)}/health';
     setState(() {
       _relayBase = host;
       _nodes[0].probeUrl = '$host/health';
@@ -384,14 +382,14 @@ class _NodeTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: stateColor.withOpacity(0.4)),
+          border: Border.all(color: stateColor.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(8),
-          color: stateColor.withOpacity(0.07),
+          color: stateColor.withValues(alpha: 0.07),
         ),
         child: ListTile(
           dense: true,
           leading:
-              Icon(node.icon, color: stateColor.withOpacity(0.85), size: 20),
+              Icon(node.icon, color: stateColor.withValues(alpha: 0.85), size: 20),
           title: Text(
             node.label,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
@@ -407,7 +405,7 @@ class _NodeTile extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: stateColor.withOpacity(0.15),
+              color: stateColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -442,7 +440,7 @@ class _ProjectTile extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border.all(color: cs.outlineVariant),
           borderRadius: BorderRadius.circular(8),
-          color: cs.surfaceContainerHighest.withOpacity(0.3),
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
         ),
         child: ListTile(
           dense: true,
@@ -462,7 +460,7 @@ class _ProjectTile extends StatelessWidget {
             project.path,
             style: TextStyle(
               fontSize: 10,
-              color: cs.onSurface.withOpacity(0.35),
+              color: cs.onSurface.withValues(alpha: 0.35),
               fontFamily: 'monospace',
             ),
           ),

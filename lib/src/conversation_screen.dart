@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+// ignore: library_prefixes -- 'IO' is socket_io_client's documented prefix.
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -835,7 +836,7 @@ class _DraftBubble extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 480),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.35),
+                color: theme.colorScheme.primary.withValues(alpha: 0.35),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
@@ -843,7 +844,7 @@ class _DraftBubble extends StatelessWidget {
                   bottomRight: Radius.circular(4),
                 ),
                 border: Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.5),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
                   width: 1,
                 ),
               ),
@@ -853,7 +854,7 @@ class _DraftBubble extends StatelessWidget {
                   SelectableText(text,
                       style: TextStyle(
                           fontSize: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.7))),
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7))),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -861,7 +862,7 @@ class _DraftBubble extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.2),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text('draft',
@@ -892,7 +893,7 @@ class _DraftBubble extends StatelessWidget {
           const SizedBox(width: 6),
           CircleAvatar(
             radius: 14,
-            backgroundColor: theme.colorScheme.primary.withOpacity(0.4),
+            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.4),
             child: const Text('M',
                 style: TextStyle(
                     fontSize: 12,
@@ -921,7 +922,6 @@ class _IdleBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
       width: double.infinity,
       color: const Color(0xFFFFF9C4),
@@ -996,8 +996,8 @@ class _MessageBubble extends StatelessWidget {
                 color: highlighted
                     ? const Color(0xFFFFF59D)
                     : isMike
-                        ? theme.colorScheme.primary.withOpacity(0.85)
-                        : theme.colorScheme.surfaceVariant,
+                        ? theme.colorScheme.primary.withValues(alpha: 0.85)
+                        : theme.colorScheme.surfaceContainerHighest,
                 border: highlighted
                     ? Border.all(color: const Color(0xFFF9A825), width: 2)
                     : null,
@@ -1066,8 +1066,8 @@ class _MessageBubble extends StatelessWidget {
                             color: highlighted
                                 ? const Color(0xFF555555)
                                 : isMike
-                                    ? theme.colorScheme.onPrimary.withOpacity(0.6)
-                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                                    ? theme.colorScheme.onPrimary.withValues(alpha: 0.6)
+                                    : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                       ),
                       if (isMike && msg.sentLocally) ...[  
                         const SizedBox(width: 4),
@@ -1075,7 +1075,7 @@ class _MessageBubble extends StatelessWidget {
                           '✓ Sent',
                           style: TextStyle(
                             fontSize: 11,
-                            color: theme.colorScheme.onPrimary.withOpacity(0.7),
+                            color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
@@ -1179,7 +1179,7 @@ class _ThinkingBubbleState extends State<_ThinkingBubble> {
             constraints: const BoxConstraints(maxWidth: 480),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
+              color: theme.colorScheme.surfaceContainerHighest,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -1191,7 +1191,7 @@ class _ThinkingBubbleState extends State<_ThinkingBubble> {
               'Dee · ${_elapsed}s$dots',
               style: TextStyle(
                   fontSize: 13,
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   fontStyle: FontStyle.italic),
             ),
           ),
@@ -1318,7 +1318,7 @@ class _InputBar extends StatelessWidget {
                   child: Icon(
                     Icons.attach_file,
                     size: 20,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ),
@@ -1678,7 +1678,7 @@ class _SearchResultTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: labelColor.withOpacity(0.12),
+                    color: labelColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(

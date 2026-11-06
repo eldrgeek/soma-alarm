@@ -39,8 +39,8 @@ ThemeData get theatricalTheme {
     inversePrimary: TheatricalColors.footlightDim,
   );
 
-  final bodyFont = GoogleFonts.raleway;
-  final displayFont = GoogleFonts.playfairDisplay;
+  const bodyFont = GoogleFonts.raleway;
+  const displayFont = GoogleFonts.playfairDisplay;
 
   final textTheme = TextTheme(
     displayLarge: displayFont(fontSize: 57, fontWeight: FontWeight.w900, color: TheatricalColors.ivory),
@@ -83,7 +83,7 @@ ThemeData get theatricalTheme {
       margin: const EdgeInsets.symmetric(vertical: 5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(TheatricalRadius.lg),
-        side: BorderSide(color: TheatricalColors.gold.withOpacity(0.1), width: 1),
+        side: BorderSide(color: TheatricalColors.gold.withValues(alpha: 0.1), width: 1),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -98,7 +98,7 @@ ThemeData get theatricalTheme {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: TheatricalColors.ivory,
-        side: BorderSide(color: TheatricalColors.gold.withOpacity(0.3)),
+        side: BorderSide(color: TheatricalColors.gold.withValues(alpha: 0.3)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(TheatricalRadius.md)),
         textStyle: bodyFont(fontSize: 14, fontWeight: FontWeight.w600),
       ),
@@ -124,7 +124,7 @@ ThemeData get theatricalTheme {
           s.contains(WidgetState.selected) ? TheatricalColors.footlight : null),
     ),
     dividerTheme: DividerThemeData(
-      color: TheatricalColors.gold.withOpacity(0.15),
+      color: TheatricalColors.gold.withValues(alpha: 0.15),
       thickness: 1,
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -132,11 +132,11 @@ ThemeData get theatricalTheme {
       fillColor: TheatricalColors.velvet,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(TheatricalRadius.md),
-        borderSide: BorderSide(color: TheatricalColors.gold.withOpacity(0.2)),
+        borderSide: BorderSide(color: TheatricalColors.gold.withValues(alpha: 0.2)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(TheatricalRadius.md),
-        borderSide: BorderSide(color: TheatricalColors.gold.withOpacity(0.2)),
+        borderSide: BorderSide(color: TheatricalColors.gold.withValues(alpha: 0.2)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(TheatricalRadius.md),

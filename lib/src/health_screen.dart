@@ -112,7 +112,7 @@ class _HealthScreenState extends State<HealthScreen> {
       children: [
         // Header card
         Card(
-          color: overallColor.withOpacity(0.15),
+          color: overallColor.withValues(alpha: 0.15),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
@@ -198,9 +198,9 @@ class _ServicePill extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(8),
-          color: color.withOpacity(0.07),
+          color: color.withValues(alpha: 0.07),
         ),
         child: ListTile(
           dense: true,
@@ -215,7 +215,7 @@ class _ServicePill extends StatelessWidget {
           subtitle: SelectableText(
             msg,
             style: TextStyle(
-              color: color.withOpacity(0.85),
+              color: color.withValues(alpha: 0.85),
               fontSize: 12,
               fontFamily: 'monospace',
             ),

@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,8 +22,7 @@ import 'package:sidekick/theme/theme_provider.dart';
 //   macOS:   macOS platform target enabled (flutter create --platforms=macos .)
 
 void main() {
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
-      as IntegrationTestWidgetsFlutterBinding;
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('Pulse mobile screenshot suite', (tester) async {
     // Boot the app under test
@@ -57,8 +55,8 @@ void main() {
         await tester.pumpAndSettle();
       } else {
         // Some platforms use a pop gesture
-        final NavigatorState? nav = tester.state(find.byType(Navigator));
-        nav?.pop();
+        final NavigatorState nav = tester.state(find.byType(Navigator));
+        nav.pop();
         await tester.pumpAndSettle();
       }
     }

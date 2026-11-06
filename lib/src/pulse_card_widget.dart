@@ -2,6 +2,8 @@
 // Wire to CardService.fetchCard(id) after receiving FCM push.
 import 'package:flutter/material.dart';
 
+// Enum names are the Pulse wire format (parsed by .name), so they stay snake_case.
+// ignore_for_file: constant_identifier_names
 enum PulseCardType {
   reply,
   yes_no,
@@ -146,7 +148,7 @@ class PulseCardWidget extends StatelessWidget {
       PulseCardType.checklist      => Icons.checklist,
       PulseCardType.reply          => Icons.chat_bubble_outline,
     };
-    return Icon(iconData, size: 20, color: cs.onSurface.withOpacity(0.7));
+    return Icon(iconData, size: 20, color: cs.onSurface.withValues(alpha: 0.7));
   }
 
   Widget _buildChecklist(BuildContext context) {

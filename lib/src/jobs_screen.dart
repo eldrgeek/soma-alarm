@@ -717,7 +717,7 @@ class _StepsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
       child: Column(
         children: steps.map((step) {
           final name = step['name'] as String? ?? '';
@@ -1041,8 +1041,8 @@ class _SourceBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
-        color: Colors.purple.withOpacity(0.15),
-        border: Border.all(color: Colors.purple.withOpacity(0.4)),
+        color: Colors.purple.withValues(alpha: 0.15),
+        border: Border.all(color: Colors.purple.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label,
@@ -1083,8 +1083,8 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        border: Border.all(color: color.withOpacity(0.4)),
+        color: color.withValues(alpha: 0.15),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
