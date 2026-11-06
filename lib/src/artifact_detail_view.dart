@@ -32,13 +32,13 @@ class ArtifactDetailView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               'Tap an artifact row in Activity to view file content inline.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
           ),
@@ -130,8 +130,8 @@ class _KindBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        border: Border.all(color: color.withOpacity(0.4)),
+        color: color.withValues(alpha: 0.15),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(

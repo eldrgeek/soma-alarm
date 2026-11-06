@@ -28,6 +28,7 @@ Future<void> main() async {
     onScreenshot: (name, bytes, [args]) async {
       final file = File('${outDir.path}/$name.png');
       await file.writeAsBytes(bytes);
+      // ignore: avoid_print -- test driver output.
       print('[screenshot] saved ${file.path}');
       return true;
     },

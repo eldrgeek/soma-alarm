@@ -217,14 +217,21 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(height: 32),
           Text('Pulse style', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          ...PulseStyle.values.map((style) {
+          Builder(builder: (context) {
             final tp = context.watch<ThemeProvider>();
-            return RadioListTile<PulseStyle>(
-              title: Text(style.displayName),
-              subtitle: Text(style.subtitle),
-              value: style,
+            return RadioGroup<PulseStyle>(
               groupValue: tp.style,
               onChanged: (v) => tp.setStyle(v!),
+              child: Column(
+                children: [
+                  for (final style in PulseStyle.values)
+                    RadioListTile<PulseStyle>(
+                      title: Text(style.displayName),
+                      subtitle: Text(style.subtitle),
+                      value: style,
+                    ),
+                ],
+              ),
             );
           }),
           const SizedBox(height: 32),

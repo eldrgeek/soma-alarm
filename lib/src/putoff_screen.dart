@@ -241,8 +241,8 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _color.withOpacity(0.15),
-        border: Border.all(color: _color.withOpacity(0.4)),
+        color: _color.withValues(alpha: 0.15),
+        border: Border.all(color: _color.withValues(alpha: 0.4)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(status,

@@ -39,8 +39,8 @@ ThemeData get ambientTheme {
     inversePrimary: AmbientColors.dawnPink,
   );
 
-  final bodyFont = GoogleFonts.dmSans;
-  final displayFont = GoogleFonts.cormorantGaramond;
+  const bodyFont = GoogleFonts.dmSans;
+  const displayFont = GoogleFonts.cormorantGaramond;
 
   final textTheme = TextTheme(
     displayLarge: displayFont(fontSize: 57, fontWeight: FontWeight.w300, color: AmbientColors.moon, letterSpacing: 4),
@@ -83,7 +83,7 @@ ThemeData get ambientTheme {
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AmbientRadius.lg),
-        side: BorderSide(color: AmbientColors.moon.withOpacity(0.05), width: 1),
+        side: BorderSide(color: AmbientColors.moon.withValues(alpha: 0.05), width: 1),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -98,7 +98,7 @@ ThemeData get ambientTheme {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: AmbientColors.moonDim,
-        side: BorderSide(color: AmbientColors.moon.withOpacity(0.08)),
+        side: BorderSide(color: AmbientColors.moon.withValues(alpha: 0.08)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         textStyle: bodyFont(fontSize: 14, fontWeight: FontWeight.w500),
       ),
@@ -113,7 +113,7 @@ ThemeData get ambientTheme {
       thumbColor: WidgetStateProperty.resolveWith((s) =>
           s.contains(WidgetState.selected) ? AmbientColors.dawnPink : null),
       trackColor: WidgetStateProperty.resolveWith((s) =>
-          s.contains(WidgetState.selected) ? AmbientColors.dawnPink.withOpacity(0.4) : null),
+          s.contains(WidgetState.selected) ? AmbientColors.dawnPink.withValues(alpha: 0.4) : null),
     ),
     radioTheme: RadioThemeData(
       fillColor: WidgetStateProperty.resolveWith((s) =>
@@ -124,7 +124,7 @@ ThemeData get ambientTheme {
           s.contains(WidgetState.selected) ? AmbientColors.dawnPink : null),
     ),
     dividerTheme: DividerThemeData(
-      color: AmbientColors.moon.withOpacity(0.06),
+      color: AmbientColors.moon.withValues(alpha: 0.06),
       thickness: 1,
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -132,11 +132,11 @@ ThemeData get ambientTheme {
       fillColor: AmbientColors.twilight,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AmbientRadius.md),
-        borderSide: BorderSide(color: AmbientColors.moon.withOpacity(0.08)),
+        borderSide: BorderSide(color: AmbientColors.moon.withValues(alpha: 0.08)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AmbientRadius.md),
-        borderSide: BorderSide(color: AmbientColors.moon.withOpacity(0.08)),
+        borderSide: BorderSide(color: AmbientColors.moon.withValues(alpha: 0.08)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AmbientRadius.md),

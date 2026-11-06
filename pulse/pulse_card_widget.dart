@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 // Wire to CardService.fetchCard(id) after receiving FCM push.
 // This is the v0 renderer scaffold; action dispatch is stubbed.
 
+// Enum names are the Pulse wire format (parsed by .name), so they stay snake_case.
+// ignore_for_file: constant_identifier_names
 enum PulseCardType { reply, yes_no, multiple_choice, link, file, permission, pending_action, checklist }
 
 class PulseCardData {
